@@ -14,7 +14,7 @@
 Summary: The GNOME Display Manager
 Name: gdm
 Version: 2.30.4
-Release: 67%{?dist}
+Release: 69%{?dist}
 Epoch: 1
 License: GPLv2+
 Group: User Interface/X
@@ -559,6 +559,12 @@ fi
 %{_libdir}/libgdm*.so*
 
 %changelog
+* Mon Dec 18 2017 Ray Strode <rstrode@redhat.com> - 2.30.4-69
+- require ReadDmrcFromHomeDir=true in [daemon] before
+  reading ~/.dmrc
+  Resolves: #1417219
+  Related: 795920
+
 * Mon Oct 31 2016 Ray Strode <rstrode@redhat.com> - 2.30.4-67
 - fix wtmp handling for XDMCP displays
   Resolves: #1297627

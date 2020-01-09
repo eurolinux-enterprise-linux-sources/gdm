@@ -1,7 +1,7 @@
 From 28c1f44cd7fc5f1a6115598e17f330c74619603a Mon Sep 17 00:00:00 2001
 From: Ray Strode <rstrode@redhat.com>
 Date: Tue, 13 Aug 2013 19:00:01 -0400
-Subject: [PATCH] try reading .dmrc before falling back to cache
+Subject: [PATCH 1/2] try reading .dmrc before falling back to cache
 
 ---
  daemon/gdm-session-settings.c |   26 ++++++++++++++++++++++++--
@@ -65,4 +65,322 @@ index 421d87a..e91ab4c 100644
  }
 -- 
 1.7.1
+
+From 94c759416e4bd3ebca34b8282ac0a70f5d089815 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Mon, 18 Dec 2017 12:57:45 -0500
+Subject: [PATCH 2/2] daemon: don't read ~/.dmrc unless configured to do so
+
+commit 568c3113c329bc7c2742e484cdee712b058510cc changed GDM
+to read ~/.dmrc first, before falling back to the cached value.
+
+That change breaks certain deployments with misconfigured firewalls
+(that force unauthenticated accesses to stall for 90 seconds
+instead of get rejected outright)
+
+This commit only enables reading ~/.dmrc after the admin sets
+ReadDmrcFromHomeDir=true in the [daemon] section of
+/etc/gdm/custom.conf
+---
+ common/gdm-settings-keys.h    |  1 +
+ daemon/gdm-session-settings.c | 21 +++++++++++++++------
+ data/gdm.schemas.in.in        |  6 ++++++
+ 3 files changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/common/gdm-settings-keys.h b/common/gdm-settings-keys.h
+index 65a16280..b512b2b7 100644
+--- a/common/gdm-settings-keys.h
++++ b/common/gdm-settings-keys.h
+@@ -5,56 +5,57 @@
+  * This library is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU Library General Public
+  * License as published by the Free Software Foundation; either
+  * version 2 of the License, or (at your option) any later version.
+  *
+  * This library is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  * Library General Public License for more details.
+  *
+  * You should have received a copy of the GNU Library General Public
+  * License along with this library; if not, write to the
+  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+  * Boston, MA 02111-1307, USA.
+  */
+ 
+ #ifndef _GDM_SETTINGS_KEYS_H
+ #define _GDM_SETTINGS_KEYS_H
+ 
+ #include <glib.h>
+ 
+ G_BEGIN_DECLS
+ 
+ #define GDM_KEY_USER "daemon/User"
+ #define GDM_KEY_GROUP "daemon/Group"
+ #define GDM_KEY_AUTO_LOGIN_ENABLE "daemon/AutomaticLoginEnable"
+ #define GDM_KEY_AUTO_LOGIN_USER "daemon/AutomaticLogin"
+ #define GDM_KEY_TIMED_LOGIN_ENABLE "daemon/TimedLoginEnable"
+ #define GDM_KEY_TIMED_LOGIN_USER "daemon/TimedLogin"
+ #define GDM_KEY_TIMED_LOGIN_DELAY "daemon/TimedLoginDelay"
++#define GDM_KEY_READ_DMRC_FROM_HOME_DIR "daemon/ReadDmrcFromHomeDir"
+ 
+ #define GDM_KEY_DEBUG "debug/Enable"
+ 
+ #define GDM_KEY_INCLUDE "greeter/Include"
+ #define GDM_KEY_EXCLUDE "greeter/Exclude"
+ #define GDM_KEY_INCLUDE_ALL "greeter/IncludeAll"
+ 
+ #define GDM_KEY_DISALLOW_TCP "security/DisallowTCP"
+ 
+ #define GDM_KEY_XDMCP_ENABLE "xdmcp/Enable"
+ #define GDM_KEY_MAX_PENDING "xdmcp/MaxPending"
+ #define GDM_KEY_MAX_SESSIONS "xdmcp/MaxSessions"
+ #define GDM_KEY_MAX_WAIT "xdmcp/MaxWait"
+ #define GDM_KEY_DISPLAYS_PER_HOST "xdmcp/DisplaysPerHost"
+ #define GDM_KEY_UDP_PORT "xdmcp/Port"
+ #define GDM_KEY_INDIRECT "xdmcp/HonorIndirect"
+ #define GDM_KEY_MAX_WAIT_INDIRECT "xdmcp/MaxWaitIndirect"
+ #define GDM_KEY_PING_INTERVAL "xdmcp/PingIntervalSeconds"
+ #define GDM_KEY_WILLING "xdmcp/Willing"
+ 
+ #define GDM_KEY_MULTICAST "chooser/Multicast"
+ #define GDM_KEY_MULTICAST_ADDR "chooser/MulticastAddr"
+ 
+ G_END_DECLS
+ 
+ #endif /* _GDM_SETTINGS_KEYS_H */
+diff --git a/daemon/gdm-session-settings.c b/daemon/gdm-session-settings.c
+index a5b512a5..efc04444 100644
+--- a/daemon/gdm-session-settings.c
++++ b/daemon/gdm-session-settings.c
+@@ -1,61 +1,66 @@
+ /* gdm-session-settings.c - Loads session and language from ~/.dmrc
+  *
+  * Copyright (C) 2008 Red Hat, Inc.
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation; either version 2, or (at your option)
+  * any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program; if not, write to the Free Software
+  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+  * 02111-1307, USA.
+  *
+  * Written by: Ray Strode <rstrode@redhat.com>
+  */
+ #include "config.h"
+ #include "gdm-session-settings.h"
+ #include "gdm-common.h"
+ 
+ #include <errno.h>
+ #include <pwd.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include <sys/types.h>
+ #include <unistd.h>
+ 
++#include "gdm-settings.h"
++#include "gdm-settings-direct.h"
++#include "gdm-settings-keys.h"
++
+ #include <glib.h>
+ #include <glib-object.h>
+ #include <glib/gi18n.h>
+ 
+ struct _GdmSessionSettingsPrivate
+ {
+         char *session_name;
+         char *language_name;
+         char *layout_name;
+ };
+ 
+ static void gdm_session_settings_finalize (GObject *object);
+ static void gdm_session_settings_class_install_properties (GdmSessionSettingsClass *
+                                               settings_class);
+ 
+ static void gdm_session_settings_set_property (GObject      *object,
+                                               guint         prop_id,
+                                               const GValue *value,
+                                               GParamSpec   *pspec);
+ static void gdm_session_settings_get_property (GObject      *object,
+                                               guint         prop_id,
+                                               GValue       *value,
+                                               GParamSpec   *pspec);
+ 
+ enum {
+         PROP_0 = 0,
+         PROP_SESSION_NAME,
+         PROP_LANGUAGE_NAME,
+         PROP_LAYOUT_NAME,
+ };
+@@ -247,78 +252,83 @@ gdm_session_settings_get_property (GObject    *object,
+     }
+ }
+ 
+ GdmSessionSettings *
+ gdm_session_settings_new (void)
+ {
+         GdmSessionSettings *settings;
+ 
+         settings = g_object_new (GDM_TYPE_SESSION_SETTINGS,
+                                  NULL);
+ 
+         return settings;
+ }
+ 
+ gboolean
+ gdm_session_settings_is_loaded (GdmSessionSettings  *settings)
+ {
+         return settings->priv->session_name != NULL ||
+                settings->priv->language_name != NULL ||
+                settings->priv->layout_name != NULL;
+ }
+ 
+ gboolean
+ gdm_session_settings_load (GdmSessionSettings  *settings,
+                            const char          *username,
+                            GError             **error)
+ {
+         GKeyFile *key_file;
+         GError   *load_error;
+         gboolean  is_loaded;
++        gboolean  read_dmrc = FALSE;
+         char     *session_name;
+         char     *language_name;
+         char     *layout_name;
+         char     *filename = NULL;
+         gboolean  tried_cache = FALSE;
+         struct passwd *pwent;
+ 
+         g_return_val_if_fail (settings != NULL, FALSE);
+         g_return_val_if_fail (username != NULL, FALSE);
+         g_return_val_if_fail (!gdm_session_settings_is_loaded (settings), FALSE);
+ 
+-        gdm_get_pwent_for_name (username, &pwent);
+-        if (pwent != NULL && pwent->pw_dir != NULL) {
+-                filename = g_build_filename (pwent->pw_dir,  ".dmrc", NULL);
++        gdm_settings_direct_get_boolean (GDM_KEY_READ_DMRC_FROM_HOME_DIR, &read_dmrc);
++
++        if (read_dmrc) {
++                gdm_get_pwent_for_name (username, &pwent);
++                if (pwent != NULL && pwent->pw_dir != NULL) {
++                        filename = g_build_filename (pwent->pw_dir,  ".dmrc", NULL);
+ 
+-                if (!g_file_test (filename, G_FILE_TEST_EXISTS)) {
+-                        g_free (filename);
+-                        filename = NULL;
++                        if (!g_file_test (filename, G_FILE_TEST_EXISTS)) {
++                                g_free (filename);
++                                filename = NULL;
++                        }
+                 }
+         }
+ 
+ again:
+         if (filename == NULL) {
+                 filename = g_build_filename (GDM_CACHE_DIR, username, "dmrc", NULL);
+                 tried_cache = TRUE;
+         }
+ 
+         is_loaded = FALSE;
+         key_file = g_key_file_new ();
+ 
+         load_error = NULL;
+         if (!g_key_file_load_from_file (key_file, filename,
+                                         G_KEY_FILE_NONE, &load_error)) {
+                 g_propagate_error (error, load_error);
+                 goto out;
+         }
+ 
+         session_name = g_key_file_get_string (key_file, "Desktop", "Session",
+                                               &load_error);
+ 
+         if (session_name != NULL) {
+                 gdm_session_settings_set_session_name (settings, session_name);
+                 g_free (session_name);
+         } else if (g_error_matches (load_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND)) {
+                 g_error_free (load_error);
+                 load_error = NULL;
+         } else {
+                 g_propagate_error (error, load_error);
+diff --git a/data/gdm.schemas.in.in b/data/gdm.schemas.in.in
+index 514117d7..816bdb7c 100644
+--- a/data/gdm.schemas.in.in
++++ b/data/gdm.schemas.in.in
+@@ -21,60 +21,66 @@
+       <key>daemon/Group</key>
+       <signature>s</signature>
+       <default>@GDM_GROUPNAME@</default>
+     </schema>
+     <schema>
+       <key>daemon/AutomaticLoginEnable</key>
+       <signature>b</signature>
+       <default>false</default>
+     </schema>
+     <schema>
+       <key>daemon/AutomaticLogin</key>
+       <signature>s</signature>
+       <default></default>
+     </schema>
+     <schema>
+       <key>daemon/TimedLoginEnable</key>
+       <signature>b</signature>
+       <default>false</default>
+     </schema>
+     <schema>
+       <key>daemon/TimedLogin</key>
+       <signature>s</signature>
+       <default></default>
+     </schema>
+     <schema>
+       <key>daemon/TimedLoginDelay</key>
+       <signature>i</signature>
+       <default>30</default>
+     </schema>
+ 
++    <schema>
++      <key>daemon/ReadDmrcFromHomeDir</key>
++      <signature>b</signature>
++      <default>false</default>
++    </schema>
++
+     <schema>
+       <key>debug/Enable</key>
+       <signature>b</signature>
+       <default>false</default>
+     </schema>
+ 
+     <schema>
+       <key>security/DisallowTCP</key>
+       <signature>b</signature>
+       <default>true</default>
+     </schema>
+ 
+     <schema>
+       <key>greeter/Include</key>
+       <signature>s</signature>
+       <default></default>
+     </schema>
+     <schema>
+       <key>greeter/Exclude</key>
+       <signature>s</signature>
+       <default>bin,root,daemon,adm,lp,sync,shutdown,halt,mail,news,uucp,operator,nobody,nobody4,noaccess,postgres,pvm,rpm,nfsnobody,pcap</default>
+     </schema>
+     <schema>
+       <key>greeter/IncludeAll</key>
+       <signature>b</signature>
+       <default>true</default>
+     </schema>
+ 
+     <schema>
+       <key>xdmcp/Enable</key>
+-- 
+2.14.3
 
