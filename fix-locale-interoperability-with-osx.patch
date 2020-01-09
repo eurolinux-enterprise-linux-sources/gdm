@@ -1,0 +1,151 @@
+From eb556f969b41e443cc5ef559da477c2fa7e4b4dc Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Tue, 13 Aug 2013 20:00:34 -0400
+Subject: [PATCH 1/2] Canonicalize codeset so it's always the proper case
+
+This gives better interoperability with OSX
+---
+ gui/simple-greeter/gdm-languages.c |   14 +++++++++++++-
+ 1 files changed, 13 insertions(+), 1 deletions(-)
+
+diff --git a/gui/simple-greeter/gdm-languages.c b/gui/simple-greeter/gdm-languages.c
+index 15485e9..5a46d02 100644
+--- a/gui/simple-greeter/gdm-languages.c
++++ b/gui/simple-greeter/gdm-languages.c
+@@ -69,6 +69,9 @@ static char * construct_language_name (const char *language,
+                                        const char *modifier);
+ 
+ static gboolean language_name_is_valid (const char *language_name);
++static void language_name_get_codeset_details (const char  *language_name,
++                                               char       **pcodeset,
++                                               gboolean    *is_utf8);
+ 
+ static void
+ gdm_locale_free (GdmLocale *locale)
+@@ -189,13 +192,22 @@ gdm_parse_language_name (const char *name,
+         }
+ 
+         if (codesetp != NULL && *codesetp != NULL) {
++                char *canonicalized_codeset = NULL;
+                 normalized_codeset = normalize_codeset (*codesetp);
+                 normalized_name = construct_language_name (language_codep ? *language_codep : NULL,
+                                                            territory_codep ? *territory_codep : NULL,
+                                                            normalized_codeset,
+                                                            modifierp ? *modifierp : NULL);
++                canonicalized_codeset = NULL;
++                language_name_get_codeset_details (normalized_name,
++                                                   &canonicalized_codeset,
++                                                   NULL);
+ 
+-                if (language_name_is_valid (normalized_name)) {
++                if (canonicalized_codeset != NULL) {
++                        g_free (normalized_codeset);
++                        g_free (*codesetp);
++                        *codesetp = canonicalized_codeset;
++                } else if (language_name_is_valid (normalized_name)) {
+                         g_free (*codesetp);
+                         *codesetp = normalized_codeset;
+                 } else {
+-- 
+1.7.1
+
+
+From 7e3095ccc244d50f618e8a15051307485a969522 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Tue, 13 Aug 2013 20:21:41 -0400
+Subject: [PATCH 2/2] daemon: canonicalize codeset in locale for default language
+
+If we pull the default langauge from the system, it may not
+have a fullly caonicalized codeset, which can cause interoperability
+issues with OSX.
+
+This commit does the dance to make sure it's canonicalized.
+---
+ daemon/Makefile.am          |    8 ++++++++
+ daemon/gdm-session-direct.c |   12 +++++++++++-
+ 2 files changed, 19 insertions(+), 1 deletions(-)
+
+diff --git a/daemon/Makefile.am b/daemon/Makefile.am
+index 674a7c4..7f11745 100644
+--- a/daemon/Makefile.am
++++ b/daemon/Makefile.am
+@@ -4,6 +4,7 @@ AM_CPPFLAGS = \
+ 	-I.						\
+ 	-I..						\
+ 	-I$(top_srcdir)/common				\
++	-I$(top_srcdir)/gui/simple-greeter		\
+ 	-DAUTHDIR=\"$(authdir)\"			\
+ 	-DBINDIR=\"$(bindir)\"				\
+ 	-DDATADIR=\"$(datadir)\"			\
+@@ -13,6 +14,7 @@ AM_CPPFLAGS = \
+ 	-DLIBEXECDIR=\"$(libexecdir)\"			\
+ 	-DLOGDIR=\"$(logdir)\"				\
+ 	-DSBINDIR=\"$(sbindir)\"			\
++	-DLIBLOCALEDIR=\""$(prefix)/lib/locale"\"	\
+ 	-DGNOMELOCALEDIR=\""$(datadir)/locale"\"	\
+ 	-DGDM_SPOOL_DIR=\"$(GDM_SPOOL_DIR)\"  \
+ 	-DGDM_XAUTH_DIR=\"$(GDM_XAUTH_DIR)\"		\
+@@ -85,6 +87,8 @@ test_session_SOURCES = 		\
+ 	gdm-session.c		\
+ 	gdm-session.h		\
+ 	gdm-session-private.h	\
++	$(top_srcdir)/gui/simple-greeter/gdm-languages.h \
++	$(top_srcdir)/gui/simple-greeter/gdm-languages.c \
+ 	gdm-session-direct.c	\
+ 	gdm-session-direct.h	\
+ 	gdm-session-record.c	\
+@@ -129,6 +133,8 @@ gdm_simple_slave_SOURCES = 		\
+ 	gdm-session.c			\
+ 	gdm-session.h			\
+ 	gdm-session-private.h		\
++	$(top_srcdir)/gui/simple-greeter/gdm-languages.h \
++	$(top_srcdir)/gui/simple-greeter/gdm-languages.c \
+ 	gdm-session-direct.c		\
+ 	gdm-session-direct.h		\
+ 	gdm-session-record.c		\
+@@ -197,6 +203,8 @@ gdm_product_slave_SOURCES = 		\
+ 	gdm-session.c			\
+ 	gdm-session.h			\
+ 	gdm-session-private.h		\
++	$(top_srcdir)/gui/simple-greeter/gdm-languages.h \
++	$(top_srcdir)/gui/simple-greeter/gdm-languages.c \
+ 	gdm-session-direct.c		\
+ 	gdm-session-direct.h		\
+ 	gdm-session-record.c		\
+diff --git a/daemon/gdm-session-direct.c b/daemon/gdm-session-direct.c
+index 189f3c0..af6d2e4 100644
+--- a/daemon/gdm-session-direct.c
++++ b/daemon/gdm-session-direct.c
+@@ -55,6 +55,8 @@
+ #include "gdm-session-private.h"
+ #include "gdm-session-direct-glue.h"
+ 
++#include "gdm-languages.h"
++
+ #include "gdm-session-record.h"
+ #include "gdm-session-worker-job.h"
+ 
+@@ -656,11 +658,19 @@ get_session_command_for_name (const char *name,
+ static const char *
+ get_default_language_name (GdmSessionDirect *session)
+ {
++    const char *locale;
++    static char *system_language = NULL;
++
+     if (session->priv->saved_language != NULL) {
+                 return session->priv->saved_language;
+     }
+ 
+-    return setlocale (LC_MESSAGES, NULL);
++    if (system_language == NULL) {
++                locale = setlocale (LC_MESSAGES, NULL);
++                system_language = gdm_normalize_language_name (locale);
++    }
++
++    return system_language;
+ }
+ 
+ static char *
+-- 
+1.7.1
+

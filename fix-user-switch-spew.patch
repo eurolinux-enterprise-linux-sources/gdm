@@ -1,0 +1,50 @@
+From c61e348cbe9d91e5dd267cc1c26b0b7a4fb12e69 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Tue, 13 Aug 2013 19:47:30 -0400
+Subject: [PATCH] slave: don't destroy session twice when user switching
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+when user-switching from the login screen this call will succeed:
+
+        migrated = try_migrate_session (slave);•
+
+Which will make this code run:
+
+        if (migrated) {•
+                destroy_session (slave);•
+•
+                /* We don't stop the slave here because•
+                   when Xorg exits it switches to the VT it was•
+                   started from.  That interferes with fast•
+                   user switching. */•
+                queue_greeter_reset (slave);•
+•
+
+queue_greeter_reset causes reset_session to get called which will
+destroy the session.  At that pint it's already destroyed because of the
+destroy_session call above.
+
+This commit drops the destroy_session call above to prevent it from getting
+destroyed twice.
+---
+ daemon/gdm-simple-slave.c |    2 --
+ 1 files changed, 0 insertions(+), 2 deletions(-)
+
+diff --git a/daemon/gdm-simple-slave.c b/daemon/gdm-simple-slave.c
+index 9485a85..dcf0c2c 100644
+--- a/daemon/gdm-simple-slave.c
++++ b/daemon/gdm-simple-slave.c
+@@ -420,8 +420,6 @@ start_session_timeout (GdmSimpleSlave *slave)
+         migrated = try_migrate_session (slave);
+         g_debug ("GdmSimpleSlave: migrated: %d", migrated);
+         if (migrated) {
+-                destroy_session (slave);
+-
+                 /* We don't stop the slave here because
+                    when Xorg exits it switches to the VT it was
+                    started from.  That interferes with fast
+-- 
+1.7.1
+

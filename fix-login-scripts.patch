@@ -1,0 +1,274 @@
+From 63d2a521d94b7914c8fa1b2690c43344f8c00462 Mon Sep 17 00:00:00 2001
+From: Paul van Tilburg <paul@luon.net>
+Date: Fri, 9 Aug 2013 14:23:33 -0400
+Subject: [PATCH 1/3] slave: respond to non-zero exit codes of PostLogin
+
+According to the documentation (see
+http://library.gnome.org/admin/gdm/stable/configuration.html.en#scripting),
+logins should be aborted if a PostLogin script exits with a non-zero
+return code.
+
+However, at the moment it doesn't and proceeds with logging the user in.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=677931
+---
+ daemon/gdm-simple-slave.c |   52 +++++++++++++++++++++++++++++++++++++++-----
+ 1 files changed, 46 insertions(+), 6 deletions(-)
+
+diff --git a/daemon/gdm-simple-slave.c b/daemon/gdm-simple-slave.c
+index c0a978f..af34719 100644
+--- a/daemon/gdm-simple-slave.c
++++ b/daemon/gdm-simple-slave.c
+@@ -206,6 +206,21 @@ greeter_reset_timeout (GdmSimpleSlave *slave)
+         return FALSE;
+ }
+ 
++static gboolean
++postlogin_failed_reset_timeout (GdmSimpleSlave *slave)
++{
++        g_debug ("GdmSimpleSlave: PostLogin script failed resetting slave");
++
++        if (slave->priv->greeter_server != NULL) {
++                reset_session (slave);
++        } else {
++                start_greeter (slave);
++                create_new_session (slave);
++        }
++        slave->priv->greeter_reset_id = 0;
++        return FALSE;
++}
++
+ static void
+ queue_greeter_reset (GdmSimpleSlave *slave)
+ {
+@@ -217,6 +232,17 @@ queue_greeter_reset (GdmSimpleSlave *slave)
+ }
+ 
+ static void
++queue_postlogin_failed_reset (GdmSimpleSlave *slave)
++{
++        /* use the greeter reset idle id so we don't do both at once */
++        if (slave->priv->greeter_reset_id > 0) {
++                return;
++        }
++
++        slave->priv->greeter_reset_id = g_idle_add ((GSourceFunc)postlogin_failed_reset_timeout, slave);
++}
++
++static void
+ on_session_setup_complete (GdmSession     *session,
+                            GdmSimpleSlave *slave)
+ {
+@@ -344,31 +370,40 @@ try_migrate_session (GdmSimpleSlave *slave)
+         return res;
+ }
+ 
+-static void
++static gboolean
+ stop_greeter (GdmSimpleSlave *slave)
+ {
+         char *username;
++        gboolean postlogin_script_ran;
+ 
+         g_debug ("GdmSimpleSlave: Stopping greeter");
+ 
+         if (slave->priv->greeter == NULL) {
+                 g_debug ("GdmSimpleSlave: No greeter running");
+-                return;
++                return TRUE;
+         }
+ 
+-        /* Run the PostLogin script. gdmslave suspends until script has terminated */
++        /* Obtain username */
+         username = gdm_session_direct_get_username (slave->priv->session);
+ 
+         if (username != NULL) {
+-                gdm_slave_run_script (GDM_SLAVE (slave), GDMCONFDIR "/PostLogin", username);
++                /* Run the PostLogin script. gdmslave suspends until script has terminated */
++                postlogin_script_ran = gdm_slave_run_script (GDM_SLAVE (slave), GDMCONFDIR "/PostLogin", username);
++                g_debug ("GdmSimpleSlave: PostLogin: %d", postlogin_script_ran);
++                if (!postlogin_script_ran) {
++                        destroy_session (slave);
++                        queue_postlogin_failed_reset (slave);
++                        return FALSE;
++                }
++                g_free (username);
+         }
+-        g_free (username);
+ 
+         gdm_welcome_session_stop (GDM_WELCOME_SESSION (slave->priv->greeter));
+         gdm_greeter_server_stop (slave->priv->greeter_server);
+ 
+         g_object_unref (slave->priv->greeter);
+         slave->priv->greeter = NULL;
++        return TRUE;
+ }
+ 
+ static gboolean
+@@ -377,6 +412,7 @@ start_session_timeout (GdmSimpleSlave *slave)
+ 
+         char    *auth_file;
+         gboolean migrated;
++        gboolean greeter_stopped;
+ 
+         g_debug ("GdmSimpleSlave: accredited");
+ 
+@@ -394,7 +430,11 @@ start_session_timeout (GdmSimpleSlave *slave)
+                 goto out;
+         }
+ 
+-        stop_greeter (slave);
++        greeter_stopped = stop_greeter (slave);
++        g_debug ("GdmSimpleSlave: greeter stopped: %d", greeter_stopped);
++        if (! greeter_stopped) {
++                goto out;
++        }
+ 
+         auth_file = NULL;
+         add_user_authorization (slave, &auth_file);
+-- 
+1.7.1
+
+
+From d8e3ce47cae176124af51d41c1cf0e8a032f5be3 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 9 Aug 2013 14:51:02 -0400
+Subject: [PATCH 2/3] slave: fix inverted exit status
+
+gdm_slave_run_script is supposed to return TRUE when the
+script succeeds, not when it fails.
+---
+ daemon/gdm-slave.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/daemon/gdm-slave.c b/daemon/gdm-slave.c
+index d597fb3..4a394f3 100644
+--- a/daemon/gdm-slave.c
++++ b/daemon/gdm-slave.c
+@@ -347,7 +347,7 @@ gdm_slave_run_script (GdmSlave   *slave,
+ 
+         if (WIFEXITED (status)) {
+                 g_debug ("GdmSlave: Process exit status: %d", WEXITSTATUS (status));
+-                ret = WEXITSTATUS (status) != 0;
++                ret = WEXITSTATUS (status) == 0;
+         } else {
+                 ret = TRUE;
+         }
+-- 
+1.7.1
+
+
+From 8d9661b9aad44c8ebb284c0fbc0e162ae7603fa4 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 9 Aug 2013 14:14:01 -0400
+Subject: [PATCH 3/3] slave: run PreSession before starting the session
+
+We currently run the PreSession script after we've already started
+loading the session. This means zenity dialogs and the like won't
+have time to get user confirmation before login continues.
+
+This commit calls the PreSession script a bit earlier, after the
+session is opened, but before it's started.  Following this commit,
+admins will be delay starting the session until a program of their
+choosing completes, or even cancel the log in process all together.
+---
+ daemon/gdm-simple-slave.c |   60 +++++++++++++++++++++++++++++++++------------
+ 1 files changed, 44 insertions(+), 16 deletions(-)
+
+diff --git a/daemon/gdm-simple-slave.c b/daemon/gdm-simple-slave.c
+index af34719..1970387 100644
+--- a/daemon/gdm-simple-slave.c
++++ b/daemon/gdm-simple-slave.c
+@@ -70,6 +70,7 @@ struct GdmSimpleSlavePrivate
+ 
+         guint              greeter_reset_id;
+         guint              start_session_id;
++        guint              stop_conversation_id;
+ 
+         int                ping_interval;
+ 
+@@ -106,23 +107,8 @@ on_session_started (GdmSession       *session,
+                     int               pid,
+                     GdmSimpleSlave   *slave)
+ {
+-        char *username;
+-
+         g_debug ("GdmSimpleSlave: session started %d", pid);
+ 
+-        /* Run the PreSession script. gdmslave suspends until script has terminated */
+-        username = gdm_session_direct_get_username (slave->priv->session);
+-        if (username != NULL) {
+-                gdm_slave_run_script (GDM_SLAVE (slave), GDMCONFDIR "/PreSession", username);
+-        }
+-        g_free (username);
+-
+-        /* FIXME: should we do something here?
+-         * Note that error return status from PreSession script should
+-         * be ignored in the case of a X-GDM-BypassXsession session, which can
+-         * be checked by calling:
+-         * gdm_session_direct_bypasses_xsession (session)
+-         */
+ }
+ 
+ static void
+@@ -453,6 +439,26 @@ start_session_timeout (GdmSimpleSlave *slave)
+         return FALSE;
+ }
+ 
++static gboolean
++stop_conversation_timeout (GdmSimpleSlave *slave)
++{
++        destroy_session (slave);
++        queue_greeter_reset (slave);
++        slave->priv->stop_conversation_id = 0;
++
++        return FALSE;
++}
++
++static void
++queue_stop_conversation (GdmSimpleSlave *slave)
++{
++        if (slave->priv->stop_conversation_id > 0) {
++                return;
++        }
++
++        slave->priv->stop_conversation_id = g_idle_add ((GSourceFunc)stop_conversation_timeout, slave);
++}
++
+ static void
+ queue_start_session (GdmSimpleSlave *slave)
+ {
+@@ -509,7 +515,29 @@ static void
+ on_session_opened (GdmSession     *session,
+                    GdmSimpleSlave *slave)
+ {
+-        queue_start_session (slave);
++        char *username;
++
++        gboolean presession_failed = FALSE;
++
++        /* Run the PreSession script. gdmslave suspends until script has terminated */
++        username = gdm_session_direct_get_username (slave->priv->session);
++        if (username != NULL) {
++                if (!gdm_slave_run_script (GDM_SLAVE (slave), GDMCONFDIR "/PreSession", username)) {
++                        presession_failed = TRUE;
++                }
++        }
++        g_free (username);
++
++        /* Note that error return status from PreSession script should
++         * be ignored in the case of a X-GDM-BypassXsession session, which can
++         * be checked by calling:
++         * gdm_session_direct_bypasses_xsession (session)
++         */
++        if (presession_failed && !gdm_session_direct_bypasses_xsession (GDM_SESSION_DIRECT (slave->priv->session))) {
++                queue_stop_conversation (slave);
++        } else {
++                queue_start_session (slave);
++        }
+ }
+ 
+ static void
+-- 
+1.7.1
+

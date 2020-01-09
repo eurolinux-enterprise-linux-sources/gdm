@@ -1,0 +1,86 @@
+From 7d9ba89c43c36229b9087e7dbe563b96ff9baf1f Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Wed, 11 Sep 2013 13:06:01 -0400
+Subject: [PATCH] daemon: don't try to start an X server if none is available.
+
+GDM can be useful as a headless XDMCP server.  If the X server
+isn't installed, don't bother trying to start a local display.
+---
+ daemon/gdm-local-display-factory.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/daemon/gdm-local-display-factory.c b/daemon/gdm-local-display-factory.c
+index 73ab499..04892cf 100644
+--- a/daemon/gdm-local-display-factory.c
++++ b/daemon/gdm-local-display-factory.c
+@@ -351,60 +351,67 @@ create_display (GdmLocalDisplayFactory *factory)
+         g_object_set (display, "seat-id", CK_SEAT1_PATH, NULL);
+ 
+         g_signal_connect (display,
+                           "notify::status",
+                           G_CALLBACK (on_static_display_status_changed),
+                           factory);
+ 
+         store_display (factory, num, display);
+ 
+         /* let store own the ref */
+         g_object_unref (display);
+ 
+         if (! gdm_display_manage (display)) {
+                 gdm_display_unmanage (display);
+         }
+ 
+         return display;
+ }
+ 
+ static gboolean
+ gdm_local_display_factory_start (GdmDisplayFactory *base_factory)
+ {
+         gboolean                ret;
+         GdmLocalDisplayFactory *factory = GDM_LOCAL_DISPLAY_FACTORY (base_factory);
+         GdmDisplay             *display;
+ 
+         g_return_val_if_fail (GDM_IS_LOCAL_DISPLAY_FACTORY (factory), FALSE);
+ 
+         ret = TRUE;
+ 
++        if (!g_file_test(X_SERVER, G_FILE_TEST_EXISTS)) {
++                g_spawn_command_line_sync ("/bin/plymouth quit", NULL, NULL, NULL, NULL);
++                g_debug ("GdmLocalDisplayFactory: No X server available, so skipping local display initialization");
++
++                return TRUE;
++        }
++
+         /* FIXME: use seat configuration */
+         display = create_display (factory);
+         if (display == NULL) {
+                 ret = FALSE;
+         }
+ 
+         return ret;
+ }
+ 
+ static gboolean
+ gdm_local_display_factory_stop (GdmDisplayFactory *base_factory)
+ {
+         GdmLocalDisplayFactory *factory = GDM_LOCAL_DISPLAY_FACTORY (base_factory);
+ 
+         g_return_val_if_fail (GDM_IS_LOCAL_DISPLAY_FACTORY (factory), FALSE);
+ 
+         return TRUE;
+ }
+ 
+ static void
+ gdm_local_display_factory_set_property (GObject       *object,
+                                         guint          prop_id,
+                                         const GValue  *value,
+                                         GParamSpec    *pspec)
+ {
+         switch (prop_id) {
+         default:
+                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+                 break;
+         }
+-- 
+1.8.3.1
+

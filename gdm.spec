@@ -1,5 +1,4 @@
-%define libauditver 1.0.6
-%define pango_version 1.2.0
+%define libauditver 1.0.6 %define pango_version 1.2.0
 %define gtk2_version 2.6.0
 %define libglade2_version 2.0.0
 %define libgnomeui_version 2.2.0
@@ -15,7 +14,7 @@
 Summary: The GNOME Display Manager
 Name: gdm
 Version: 2.30.4
-Release: 39%{?dist}
+Release: 52%{?dist}
 Epoch: 1
 License: GPLv2+
 Group: User Interface/X
@@ -152,6 +151,30 @@ Patch20: fix-window-warning.patch
 # https://bugzilla.redhat.com/show_bug.cgi?id=834303
 Patch21: dont-spam-syslog.patch
 
+# https://bugzilla.redhat.com/show_bug.cgi?id=844004
+Patch22: fix-login-scripts.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=759174
+Patch23: fix-indirect-queries.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=861114
+Patch24: make-pam-messages-wrap.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=712959
+Patch25: fix-user-switcher.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=795920
+Patch26: read-home-dmrc-first.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=818074
+Patch27: fix-user-switch-spew.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=874707
+Patch28: fix-locale-interoperability-with-osx.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1006947
+Patch29: run-headless-if-no-local-Xserver.patch
+
 Patch96: gdm-multistack.patch
 
 # Distro-specific
@@ -222,6 +245,14 @@ The GDM libs subpackage contains experimental libraries for developing GDM plugi
 %patch19 -p1 -b .fix-xauth
 %patch20 -p1 -b .fix-window-warning
 %patch21 -p1 -b .dont-spam-syslog
+%patch22 -p1 -b .fix-login-scripts
+%patch23 -p1 -b .fix-indirect-queries
+%patch24 -p1 -b .make-pam-messages-wrap
+%patch25 -p1 -b .fix-user-switcher-crash
+%patch26 -p1 -b .read-home-dmrc-first
+%patch27 -p1 -b .fix-user-switch-spew
+%patch28 -p1 -b .fix-locale-interoperability-with-osx
+%patch29 -p1 -b .run-headless-when-no-xserver
 
 %patch96 -p1 -b .multistack
 %patch97 -p1 -b .bubble-location
@@ -484,6 +515,65 @@ fi
 %{_libdir}/libgdm*.so*
 
 %changelog
+* Thu Sep 26 2013 Ray Strode <rstrode@redhat.com> 2.30.4-52
+- Fix smartcard authentication after PIN failure
+  Resolves: #977560
+
+* Wed Sep 25 2013 Ray Strode <rstrode@redhat.com> 2.30.4-51
+- Use ~/.dmrc if found
+  Related: #795920
+
+* Wed Sep 11 2013 Ray Strode <rstrode@redhat.com> 2.30.4-50
+- Quietly run headless if the X server isn't installed.
+  Prevents warning on s390
+  Resolves: #1006947
+
+* Tue Sep 10 2013 Ray Strode <rstrode@redhat.com> 2.30.4-49
+- Fix fallback module loading code
+  Related: #1004475
+
+* Tue Aug 13 2013 Ray Strode <rstrode@redhat.com> 2.30.4-48
+- Race the default minimum timeout to 3 seconds
+  Resolves: #785775, #865832
+
+* Tue Aug 13 2013 Ray Strode <rstrode@redhat.com> 2.30.4-47
+- Fix locale interoperability with OSX
+  Resolves: #874707
+
+* Tue Aug 13 2013 Ray Strode <rstrode@redhat.com> 2.30.4-46
+- Fix log spew caused when user switching
+  Resolves: #818074
+
+* Tue Aug 13 2013 Ray Strode <rstrode@redhat.com> 2.30.4-45
+- Fix smartcard crash if coolkey isn't installed
+  Resolves: #953552
+- Forward port RHEL5 crasher/hang fixes
+  Resolves: #874202
+
+* Tue Aug 13 2013 Ray Strode <rstrode@redhat.com> 2.30.4-44
+- Read ~/.dmrc before falling back to cached copy
+  Resolves: #795920
+
+* Tue Aug 13 2013 Ray Strode <rstrode@redhat.com> 2.30.4-43
+- Attempt to fix sporadic user switcher crash at startup
+  Related: #712959
+
+* Fri Aug 09 2013 Ray Strode <rstrode@redhat.com> 2.30.4-42
+- Make long PAM messages wrap instead of grow the window
+  Resolves: #861114
+
+* Fri Aug 09 2013 Ray Strode <rstrode@redhat.com> 2.30.4-41
+- Fix XDMCP chooser when choosing remote machines
+  Resolves: #759174
+
+* Fri Aug 09 2013 Ray Strode <rstrode@redhat.com> 2.30.4-40
+- Make login scripts synchronous and respect their
+  error codes
+  Resolves: #844004
+- Fix typo is dont-spam-syslog patch that prevented
+  slave debug logs from showing up.
+  Related: 834303
+
 * Tue Oct 23 2012 Ray Strode <rstrode@redhat.com> 2.30.4-39
 - Fix XDMCP to localhost
   Resolves: #867981

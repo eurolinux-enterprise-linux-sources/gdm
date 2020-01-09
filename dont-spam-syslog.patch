@@ -27,7 +27,7 @@ diff -up gdm-2.30.4/common/gdm-log.c.dont-spam-syslog gdm-2.30.4/common/gdm-log.
 -static int      syslog_levels = (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING);
 +static gboolean enabled = FALSE;
 +static int log_levels = (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING);
-+static char *log_path = -1;
++static char *log_path = NULL;
 +static int log_fd = -1;
 +
 +static void

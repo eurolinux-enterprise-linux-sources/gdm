@@ -1,0 +1,68 @@
+From 28c1f44cd7fc5f1a6115598e17f330c74619603a Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Tue, 13 Aug 2013 19:00:01 -0400
+Subject: [PATCH] try reading .dmrc before falling back to cache
+
+---
+ daemon/gdm-session-settings.c |   26 ++++++++++++++++++++++++--
+ 1 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/daemon/gdm-session-settings.c b/daemon/gdm-session-settings.c
+index 421d87a..e91ab4c 100644
+--- a/daemon/gdm-session-settings.c
++++ b/daemon/gdm-session-settings.c
+@@ -21,6 +21,7 @@
+  */
+ #include "config.h"
+ #include "gdm-session-settings.h"
++#include "gdm-common.h"
+ 
+ #include <errno.h>
+ #include <pwd.h>
+@@ -276,13 +277,29 @@ gdm_session_settings_load (GdmSessionSettings  *settings,
+         char     *session_name;
+         char     *language_name;
+         char     *layout_name;
+-        char     *filename;
++        char     *filename = NULL;
++        gboolean  tried_cache = FALSE;
++        struct passwd *pwent;
+ 
+         g_return_val_if_fail (settings != NULL, FALSE);
+         g_return_val_if_fail (username != NULL, FALSE);
+         g_return_val_if_fail (!gdm_session_settings_is_loaded (settings), FALSE);
+ 
+-        filename = g_build_filename (GDM_CACHE_DIR, username, "dmrc", NULL);
++        gdm_get_pwent_for_name (username, &pwent);
++        if (pwent != NULL && pwent->pw_dir != NULL) {
++                filename = g_build_filename (pwent->pw_dir,  ".dmrc", NULL);
++
++                if (!g_file_test (filename, G_FILE_TEST_EXISTS)) {
++                        g_free (filename);
++                        filename = NULL;
++                }
++        }
++
++again:
++        if (filename == NULL) {
++                filename = g_build_filename (GDM_CACHE_DIR, username, "dmrc", NULL);
++                tried_cache = TRUE;
++        }
+ 
+         is_loaded = FALSE;
+         key_file = g_key_file_new ();
+@@ -340,6 +357,11 @@ gdm_session_settings_load (GdmSessionSettings  *settings,
+ out:
+         g_key_file_free (key_file);
+         g_free (filename);
++        filename = NULL;
++
++        if (!is_loaded && !tried_cache) {
++                goto again;
++        }
+ 
+         return is_loaded;
+ }
+-- 
+1.7.1
+

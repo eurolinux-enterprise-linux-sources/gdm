@@ -1,0 +1,62 @@
+From dcc920755d7b31ad20952bb244246a5a1e1a0ffe Mon Sep 17 00:00:00 2001
+From: Olivier Fourdan <ofourdan@redhat.com>
+Date: Fri, 9 Aug 2013 17:12:48 -0400
+Subject: [PATCH] xdcmp: fix selecting remote hosts from chooser
+
+The XDMCP indirect query is supposed to be forwarded by
+gdm_xdmcp_send_forward_query() from daemon/gdm-xdmcp-display-factory.c:
+
+XdmcpFlush (factory->priv->socket_fd,
+            &factory->priv->buf,
+            (XdmcpNetaddr)gdm_address_peek_sockaddr_storage
+            (ic->chosen_address),
+            (int)gdm_sockaddr_len
+            (gdm_address_peek_sockaddr_storage
+             (ic->chosen_address)));
+
+However, checking the return value of XdmcpFlush() we can see
+the call fails with "Invalid Argument". The address (ic->chosen_address)
+selected is correct but the port is 0 instead of 177, so the indirect
+query is never forwarded to the selected host.
+
+The reason for this is because the chosen_address is set in
+on_hostname_selected() from daemon/gdm-xdmcp-display-factory.c via
+getaddrinfo() but the service field passed to getaddrinfo() is NULL,
+while it should be the actual XDMCP port ("177").
+
+This commit ensures the correct port is passed to getaddrinfo and
+fixes the chooser when choosing remote machines.
+---
+ daemon/gdm-xdmcp-display-factory.c |    6 +++++-
+ 1 files changed, 5 insertions(+), 1 deletions(-)
+
+diff --git a/daemon/gdm-xdmcp-display-factory.c b/daemon/gdm-xdmcp-display-factory.c
+index 537bc55..66c776c 100644
+--- a/daemon/gdm-xdmcp-display-factory.c
++++ b/daemon/gdm-xdmcp-display-factory.c
+@@ -1991,6 +1991,7 @@ on_hostname_selected (GdmXdmcpChooserDisplay *display,
+         int              gaierr;
+         GdmAddress      *address;
+         IndirectClient  *ic;
++        gchar           *xdmcp_port;
+ 
+         g_debug ("GdmXdmcpDisplayFactory: hostname selected: %s",
+                 hostname ? hostname : "(null)");
+@@ -2011,10 +2012,13 @@ on_hostname_selected (GdmXdmcpChooserDisplay *display,
+         /* this should convert IPv4 address to IPv6 if needed */
+         hints.ai_flags = AI_V4MAPPED;
+ 
+-        if ((gaierr = getaddrinfo (hostname, NULL, &hints, &ai_list)) != 0) {
++        xdmcp_port = g_strdup_printf ("%d", XDM_UDP_PORT);
++        if ((gaierr = getaddrinfo (hostname, xdmcp_port, &hints, &ai_list)) != 0) {
+                 g_warning ("Unable to get address: %s", gai_strerror (gaierr));
++                g_free (xdmcp_port);
+                 return;
+         }
++        g_free (xdmcp_port);
+ 
+         /* just take the first one */
+         ai = ai_list;
+-- 
+1.7.1
+
