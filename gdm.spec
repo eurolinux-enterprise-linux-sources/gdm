@@ -14,7 +14,7 @@
 Summary: The GNOME Display Manager
 Name: gdm
 Version: 2.30.4
-Release: 64%{?dist}
+Release: 67%{?dist}
 Epoch: 1
 License: GPLv2+
 Group: User Interface/X
@@ -193,6 +193,15 @@ Patch34: add-remotely-usable-xauth-cookies.patch
 # https://bugzilla.redhat.com/show_bug.cgi?id=1030163
 Patch35: fix-addr-debug-fail.patch
 
+# https://bugzilla.redhat.com/show_bug.cgi?id=1083680
+Patch36: add-keyboard-plugin.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1218851
+Patch37: fix-xdmcp-keep-alive-handling.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1297627
+Patch38: fix-wtmp-for-remote-displays.patch
+
 Patch96: gdm-multistack.patch
 
 # Distro-specific
@@ -283,6 +292,9 @@ The GDM libs subpackage contains experimental libraries for developing GDM plugi
 %patch33 -p1 -b .fix-user-switching-crash
 %patch34 -p1 -b .add-remotely-usable-xauth-cookies
 %patch35 -p1 -b .fix-addr-debug-fail
+%patch36 -p1 -b .add-keyboard-plugin
+%patch37 -p1 -b .fix-xdmcp-keep-alive-handling
+%patch38 -p1 -b .fix-wtmp-for-remote-displays
 
 %patch96 -p1 -b .multistack
 %patch97 -p1 -b .bubble-location
@@ -547,6 +559,19 @@ fi
 %{_libdir}/libgdm*.so*
 
 %changelog
+* Mon Oct 31 2016 Ray Strode <rstrode@redhat.com> - 2.30.4-67
+- fix wtmp handling for XDMCP displays
+  Resolves: #1297627
+
+* Mon Oct 31 2016 Ray Strode <rstrode@redhat.com> - 2.30.4-66
+- Fix XDMCP Keep Alive handling
+  Resolves: #1218851
+  Resolves: #1337067
+
+* Mon Oct 31 2016 Ray Strode <rstrode@redhat.com> - 2.30.4-65
+- Remember numlock status across reboots
+  Resolves: #1083680
+
 * Wed Sep 10 2014 Ray Strode <rstrode@redhat.com> 2.30.4-64
 - One more crack at user switching crash
   Resolves: #1048769

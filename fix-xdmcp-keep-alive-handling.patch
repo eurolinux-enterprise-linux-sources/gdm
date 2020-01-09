@@ -1,0 +1,82 @@
+From 4120c12cef1ba8754d46dad10a4a2eb616623673 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Mon, 31 Oct 2016 15:51:07 -0400
+Subject: [PATCH] display: set state to MANAGED in gdm_display_real_manage
+
+An oversight in the code means, displays never get marked
+MANAGED.  This doesn't actually matter much for local displays,
+but for XDMCP it messes up the keepalive machinery.
+---
+ daemon/gdm-display.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/daemon/gdm-display.c b/daemon/gdm-display.c
+index 0eacbce..7c658d5 100644
+--- a/daemon/gdm-display.c
++++ b/daemon/gdm-display.c
+@@ -612,60 +612,62 @@ gdm_display_prepare (GdmDisplay *display)
+         ret = GDM_DISPLAY_GET_CLASS (display)->prepare (display);
+         g_object_unref (display);
+ 
+         return ret;
+ }
+ 
+ 
+ static gboolean
+ gdm_display_real_manage (GdmDisplay *display)
+ {
+         gboolean res;
+ 
+         g_return_val_if_fail (GDM_IS_DISPLAY (display), FALSE);
+ 
+         g_debug ("GdmDisplay: manage display");
+ 
+         /* If not explicitly prepared, do it now */
+         if (display->priv->status == GDM_DISPLAY_UNMANAGED) {
+                 res = gdm_display_prepare (display);
+                 if (! res) {
+                         return FALSE;
+                 }
+         }
+ 
+         g_assert (display->priv->slave_proxy != NULL);
+ 
+         g_timer_start (display->priv->slave_timer);
+ 
+         gdm_slave_proxy_start (display->priv->slave_proxy);
+ 
++        _gdm_display_set_status (display, GDM_DISPLAY_MANAGED);
++
+         return TRUE;
+ }
+ 
+ gboolean
+ gdm_display_manage (GdmDisplay *display)
+ {
+         gboolean ret;
+ 
+         g_return_val_if_fail (GDM_IS_DISPLAY (display), FALSE);
+ 
+         g_debug ("GdmDisplay: Managing display: %s", display->priv->id);
+ 
+         g_object_ref (display);
+         ret = GDM_DISPLAY_GET_CLASS (display)->manage (display);
+         g_object_unref (display);
+ 
+         return ret;
+ }
+ 
+ static gboolean
+ gdm_display_real_finish (GdmDisplay *display)
+ {
+         g_return_val_if_fail (GDM_IS_DISPLAY (display), FALSE);
+ 
+         _gdm_display_set_status (display, GDM_DISPLAY_FINISHED);
+ 
+         g_debug ("GdmDisplay: finish display");
+ 
+         return TRUE;
+ }
+-- 
+2.7.4
+
