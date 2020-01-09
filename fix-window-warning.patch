@@ -1,0 +1,11 @@
+diff -up gdm-2.30.4/gui/simple-greeter/gdm-greeter-login-window.ui.fix-window-warning gdm-2.30.4/gui/simple-greeter/gdm-greeter-login-window.ui
+--- gdm-2.30.4/gui/simple-greeter/gdm-greeter-login-window.ui.fix-window-warning	2012-09-25 20:48:02.919458438 -0400
++++ gdm-2.30.4/gui/simple-greeter/gdm-greeter-login-window.ui	2012-09-25 20:48:16.067713032 -0400
+@@ -231,7 +231,6 @@
+                         <property name="visible">True</property>
+                         <property name="can_focus">True</property>
+                         <property name="can_default">True</property>
+-                        <property name="has_default">True</property>
+                         <property name="receives_default">False</property>
+                         <child>
+                           <object class="GtkHBox" id="hbox5">

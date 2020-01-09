@@ -1,0 +1,28 @@
+From 9edc4934ec26863ab1c86ac292b9f28b45356ee9 Mon Sep 17 00:00:00 2001
+From: Matthias Clasen <mclasen@redhat.com>
+Date: Wed, 27 Jul 2011 14:50:02 -0400
+Subject: [PATCH] Move bubbles to the lower right of the login screen
+
+---
+ data/session-setup.entries |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/data/session-setup.entries b/data/session-setup.entries
+index f787953..88f957f 100644
+--- a/data/session-setup.entries
++++ b/data/session-setup.entries
+@@ -774,5 +774,11 @@
+         <string>/bin/true</string>
+       </value>
+     </entry>
++    <entry>
++      <key>/apps/notification-daemon/popup_location</key>
++      <value>
++        <string>bottom_right</string>
++      </value>
++    </entry>
+   </entrylist>
+ </gconfentryfile>
+-- 
+1.7.1
+

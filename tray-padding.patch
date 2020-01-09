@@ -1,0 +1,28 @@
+From 2936ec8b8b5f1f0a88d15afd50e059356f54dea2 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Wed, 27 Jul 2011 14:50:35 -0400
+Subject: [PATCH] Add padding to the notification tray
+
+---
+ data/session-setup.entries |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/data/session-setup.entries b/data/session-setup.entries
+index 88f957f..da0fd0e 100644
+--- a/data/session-setup.entries
++++ b/data/session-setup.entries
+@@ -780,5 +780,11 @@
+         <string>bottom_right</string>
+       </value>
+     </entry>
++    <entry>
++      <key>/apps/notification_area_applet/prefs/padding</key>
++      <value>
++        <int>3</int>
++      </value>
++    </entry>
+   </entrylist>
+ </gconfentryfile>
+-- 
+1.7.1
+

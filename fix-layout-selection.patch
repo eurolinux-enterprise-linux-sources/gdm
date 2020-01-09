@@ -1,0 +1,1908 @@
+From a4d09d3032fb9fc1eb58021e987680b8b4c519d0 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 5 Aug 2011 12:25:46 -0400
+Subject: [PATCH 1/2] greeter: drop layout chooser
+
+It causes more problems than it solves.
+---
+ gui/simple-greeter/Makefile.am                 |   43 ----
+ gui/simple-greeter/gdm-greeter-panel.c         |   84 -------
+ gui/simple-greeter/gdm-greeter-panel.h         |    5 -
+ gui/simple-greeter/gdm-greeter-session.c       |   27 ---
+ gui/simple-greeter/gdm-layout-chooser-dialog.c |  197 ----------------
+ gui/simple-greeter/gdm-layout-chooser-dialog.h |   59 -----
+ gui/simple-greeter/gdm-layout-chooser-widget.c |  207 -----------------
+ gui/simple-greeter/gdm-layout-chooser-widget.h |   58 -----
+ gui/simple-greeter/gdm-layout-option-widget.c  |  294 ------------------------
+ gui/simple-greeter/gdm-layout-option-widget.h  |   62 -----
+ gui/simple-greeter/gdm-layouts.c               |  274 ----------------------
+ gui/simple-greeter/gdm-layouts.h               |   35 ---
+ gui/simple-greeter/test-layout-chooser.c       |   61 -----
+ po/POTFILES.in                                 |    3 -
+ 14 files changed, 0 insertions(+), 1409 deletions(-)
+ delete mode 100644 gui/simple-greeter/gdm-layout-chooser-dialog.c
+ delete mode 100644 gui/simple-greeter/gdm-layout-chooser-dialog.h
+ delete mode 100644 gui/simple-greeter/gdm-layout-chooser-widget.c
+ delete mode 100644 gui/simple-greeter/gdm-layout-chooser-widget.h
+ delete mode 100644 gui/simple-greeter/gdm-layout-option-widget.c
+ delete mode 100644 gui/simple-greeter/gdm-layout-option-widget.h
+ delete mode 100644 gui/simple-greeter/gdm-layouts.c
+ delete mode 100644 gui/simple-greeter/gdm-layouts.h
+ delete mode 100644 gui/simple-greeter/test-layout-chooser.c
+
+diff --git a/gui/simple-greeter/Makefile.am b/gui/simple-greeter/Makefile.am
+index d486535..d82b6c2 100644
+--- a/gui/simple-greeter/Makefile.am
++++ b/gui/simple-greeter/Makefile.am
+@@ -63,7 +63,6 @@ noinst_PROGRAMS = 			\
+ 	test-greeter-login-window	\
+ 	test-greeter-panel		\
+ 	test-language-chooser		\
+-	test-layout-chooser		\
+ 	test-languages			\
+ 	test-sessions			\
+ 	test-remote-login-window	\
+@@ -133,14 +132,6 @@ test_greeter_panel_SOURCES = 	\
+ 	gdm-language-chooser-dialog.c	\
+ 	gdm-language-option-widget.h	\
+ 	gdm-language-option-widget.c	\
+-	gdm-layout-chooser-widget.h	\
+-	gdm-layout-chooser-widget.c	\
+-	gdm-layout-chooser-dialog.h	\
+-	gdm-layout-chooser-dialog.c	\
+-	gdm-layout-option-widget.h	\
+-	gdm-layout-option-widget.c	\
+-	gdm-layouts.h			\
+-	gdm-layouts.c			\
+ 	gdm-sessions.h			\
+ 	gdm-sessions.c			\
+ 	gdm-session-option-widget.h	\
+@@ -154,7 +145,6 @@ test_greeter_panel_LDADD =	\
+ 	$(SIMPLE_GREETER_LIBS)		\
+ 	$(GTK_LIBS)			\
+ 	$(GCONF_LIBS)			\
+-	$(LIBXKLAVIER_LIBS)		\
+ 	$(DEVKIT_POWER_LIBS)		\
+ 	$(NULL)
+ 
+@@ -201,30 +191,6 @@ test_language_chooser_LDADD =	\
+ 	$(GCONF_LIBS)		\
+ 	$(NULL)
+ 
+-test_layout_chooser_SOURCES = 	\
+-	test-layout-chooser.c		\
+-	gdm-cell-renderer-timer.h	\
+-	gdm-cell-renderer-timer.c	\
+-	gdm-timer.h			\
+-	gdm-timer.c			\
+-	gdm-scrollable-widget.h		\
+-	gdm-scrollable-widget.c		\
+-	gdm-chooser-widget.h		\
+-	gdm-chooser-widget.c		\
+-	gdm-layouts.h			\
+-	gdm-layouts.c			\
+-	gdm-layout-chooser-widget.h	\
+-	gdm-layout-chooser-widget.c	\
+-	gdm-layout-chooser-dialog.h	\
+-	gdm-layout-chooser-dialog.c	\
+-	$(NULL)
+-
+-test_layout_chooser_LDADD =		\
+-	$(GTK_LIBS)			\
+-	$(GCONF_LIBS)			\
+-	$(LIBXKLAVIER_LIBS)		\
+-	$(NULL)
+-
+ test_languages_SOURCES = 		\
+ 	test-languages.c		\
+ 	gdm-languages.h			\
+@@ -313,14 +279,6 @@ gdm_simple_greeter_SOURCES =  		\
+ 	gdm-languages.c			\
+ 	gdm-language-chooser-widget.h	\
+ 	gdm-language-chooser-widget.c	\
+-	gdm-layout-chooser-widget.h	\
+-	gdm-layout-chooser-widget.c	\
+-	gdm-layout-chooser-dialog.h	\
+-	gdm-layout-chooser-dialog.c	\
+-	gdm-layout-option-widget.h	\
+-	gdm-layout-option-widget.c	\
+-	gdm-layouts.h			\
+-	gdm-layouts.c			\
+ 	locarchive.h			\
+ 	gdm-language-chooser-dialog.h	\
+ 	gdm-language-chooser-dialog.c	\
+@@ -349,7 +307,6 @@ gdm_simple_greeter_LDADD = 		\
+ 	$(EXTRA_GREETER_LIBS)   	\
+ 	$(SIMPLE_GREETER_LIBS)		\
+ 	$(RBAC_LIBS)			\
+-	$(LIBXKLAVIER_LIBS)		\
+ 	$(DEVKIT_POWER_LIBS)		\
+ 	$(NULL)
+ 
+diff --git a/gui/simple-greeter/gdm-greeter-panel.c b/gui/simple-greeter/gdm-greeter-panel.c
+index a852646..c3d3372 100644
+--- a/gui/simple-greeter/gdm-greeter-panel.c
++++ b/gui/simple-greeter/gdm-greeter-panel.c
+@@ -45,11 +45,9 @@
+ #endif
+ 
+ #include "gdm-languages.h"
+-#include "gdm-layouts.h"
+ #include "gdm-greeter-panel.h"
+ #include "gdm-clock-widget.h"
+ #include "gdm-language-option-widget.h"
+-#include "gdm-layout-option-widget.h"
+ #include "gdm-session-option-widget.h"
+ #include "gdm-timer.h"
+ #include "gdm-profile.h"
+@@ -81,7 +79,6 @@ struct GdmGreeterPanelPrivate
+         GtkWidget              *shutdown_button;
+         GtkWidget              *shutdown_menu;
+         GtkWidget              *language_option_widget;
+-        GtkWidget              *layout_option_widget;
+         GtkWidget              *session_option_widget;
+ 
+         GdmTimer               *animation_timer;
+@@ -452,26 +449,6 @@ on_language_activated (GdmLanguageOptionWidget *widget,
+ }
+ 
+ static void
+-on_layout_activated (GdmLayoutOptionWidget *widget,
+-                     GdmGreeterPanel       *panel)
+-{
+-
+-        char *layout;
+-
+-        layout = gdm_layout_option_widget_get_current_layout_name (GDM_LAYOUT_OPTION_WIDGET (panel->priv->layout_option_widget));
+-
+-        if (layout == NULL) {
+-                return;
+-        }
+-
+-        g_debug ("GdmGreeterPanel: activating selected layout %s", layout);
+-        gdm_layout_activate (layout);
+-
+-        g_signal_emit (panel, signals[LAYOUT_SELECTED], 0, layout);
+-
+-        g_free (layout);
+-}
+-static void
+ on_session_activated (GdmSessionOptionWidget *widget,
+                       GdmGreeterPanel        *panel)
+ {
+@@ -769,12 +746,6 @@ setup_panel (GdmGreeterPanel *panel)
+         gtk_box_pack_start (GTK_BOX (panel->priv->option_hbox), panel->priv->language_option_widget, FALSE, FALSE, 6);
+         gdm_profile_end ("creating option widget");
+ 
+-        panel->priv->layout_option_widget = gdm_layout_option_widget_new ();
+-        g_signal_connect (G_OBJECT (panel->priv->layout_option_widget),
+-                          "layout-activated",
+-                          G_CALLBACK (on_layout_activated), panel);
+-        gtk_box_pack_start (GTK_BOX (panel->priv->option_hbox), panel->priv->layout_option_widget, FALSE, FALSE, 6);
+-
+         panel->priv->session_option_widget = gdm_session_option_widget_new ();
+         g_signal_connect (G_OBJECT (panel->priv->session_option_widget),
+                           "session-activated",
+@@ -943,17 +914,6 @@ gdm_greeter_panel_class_init (GdmGreeterPanelClass *klass)
+                               G_TYPE_NONE,
+                               1, G_TYPE_STRING);
+ 
+-        signals[LAYOUT_SELECTED] =
+-                g_signal_new ("layout-selected",
+-                              G_TYPE_FROM_CLASS (object_class),
+-                              G_SIGNAL_RUN_LAST,
+-                              G_STRUCT_OFFSET (GdmGreeterPanelClass, layout_selected),
+-                              NULL,
+-                              NULL,
+-                              g_cclosure_marshal_VOID__STRING,
+-                              G_TYPE_NONE,
+-                              1, G_TYPE_STRING);
+-
+         signals[SESSION_SELECTED] =
+                 g_signal_new ("session-selected",
+                               G_TYPE_FROM_CLASS (object_class),
+@@ -1006,7 +966,6 @@ gdm_greeter_panel_show_user_options (GdmGreeterPanel *panel)
+ {
+         gtk_widget_show (panel->priv->session_option_widget);
+         gtk_widget_show (panel->priv->language_option_widget);
+-        gtk_widget_show (panel->priv->layout_option_widget);
+ }
+ 
+ void
+@@ -1014,16 +973,11 @@ gdm_greeter_panel_hide_user_options (GdmGreeterPanel *panel)
+ {
+         gtk_widget_hide (panel->priv->session_option_widget);
+         gtk_widget_hide (panel->priv->language_option_widget);
+-        gtk_widget_hide (panel->priv->layout_option_widget);
+-
+-        g_debug ("GdmGreeterPanel: activating default layout");
+-        gdm_layout_activate (NULL);
+ }
+ 
+ void
+ gdm_greeter_panel_reset (GdmGreeterPanel *panel)
+ {
+-        gdm_greeter_panel_set_keyboard_layout (panel, NULL);
+         gdm_greeter_panel_set_default_language_name (panel, NULL);
+         gdm_greeter_panel_set_default_session_name (panel, NULL);
+         gdm_greeter_panel_hide_user_options (panel);
+@@ -1057,44 +1011,6 @@ gdm_greeter_panel_set_default_language_name (GdmGreeterPanel *panel,
+ }
+ 
+ void
+-gdm_greeter_panel_set_keyboard_layout (GdmGreeterPanel *panel,
+-                                       const char      *layout_name)
+-{
+-#ifdef HAVE_LIBXKLAVIER
+-        g_return_if_fail (GDM_IS_GREETER_PANEL (panel));
+-
+-        if (layout_name != NULL &&
+-            !gdm_layout_is_valid (layout_name)) {
+-                const char *default_layout;
+-
+-                default_layout = gdm_layout_get_default_layout ();
+-
+-                g_debug ("GdmGreeterPanel: default layout %s is invalid, resetting to: %s",
+-                         layout_name, default_layout ? default_layout : "null");
+-
+-                g_signal_emit (panel, signals[LAYOUT_SELECTED], 0, default_layout);
+-
+-                layout_name = default_layout;
+-        }
+-
+-        if (layout_name != NULL &&
+-            !gdm_option_widget_lookup_item (GDM_OPTION_WIDGET (panel->priv->layout_option_widget),
+-                                            layout_name, NULL, NULL, NULL)) {
+-                gdm_recent_option_widget_add_item (GDM_RECENT_OPTION_WIDGET (panel->priv->layout_option_widget),
+-                                                   layout_name);
+-        }
+-
+-        gdm_option_widget_set_active_item (GDM_OPTION_WIDGET (panel->priv->layout_option_widget),
+-                                           layout_name);
+-        gdm_option_widget_set_default_item (GDM_OPTION_WIDGET (panel->priv->layout_option_widget),
+-                                            layout_name);
+-
+-        g_debug ("GdmGreeterPanel: activating layout: %s", layout_name);
+-        gdm_layout_activate (layout_name);
+-#endif
+-}
+-
+-void
+ gdm_greeter_panel_set_default_session_name (GdmGreeterPanel *panel,
+                                             const char      *session_name)
+ {
+diff --git a/gui/simple-greeter/gdm-greeter-panel.h b/gui/simple-greeter/gdm-greeter-panel.h
+index 6a4848e..1354371 100644
+--- a/gui/simple-greeter/gdm-greeter-panel.h
++++ b/gui/simple-greeter/gdm-greeter-panel.h
+@@ -48,9 +48,6 @@ typedef struct
+         void (* language_selected)           (GdmGreeterPanel *panel,
+                                               const char      *text);
+ 
+-        void (* layout_selected)             (GdmGreeterPanel *panel,
+-                                              const char      *text);
+-
+         void (* session_selected)            (GdmGreeterPanel *panel,
+                                               const char      *text);
+ } GdmGreeterPanelClass;
+@@ -64,8 +61,6 @@ GtkWidget            * gdm_greeter_panel_new                            (GdkScre
+ void                   gdm_greeter_panel_show_user_options              (GdmGreeterPanel *panel);
+ void                   gdm_greeter_panel_hide_user_options              (GdmGreeterPanel *panel);
+ void                   gdm_greeter_panel_reset                          (GdmGreeterPanel *panel);
+-void                   gdm_greeter_panel_set_keyboard_layout            (GdmGreeterPanel *panel,
+-                                                                         const char      *layout_name);
+ 
+ void                   gdm_greeter_panel_set_default_language_name      (GdmGreeterPanel *panel,
+                                                                          const char      *language_name);
+diff --git a/gui/simple-greeter/gdm-greeter-session.c b/gui/simple-greeter/gdm-greeter-session.c
+index 765f6e6..41c0b91 100644
+--- a/gui/simple-greeter/gdm-greeter-session.c
++++ b/gui/simple-greeter/gdm-greeter-session.c
+@@ -162,16 +162,6 @@ on_default_language_name_changed (GdmGreeterClient  *client,
+ }
+ 
+ static void
+-on_default_layout_name_changed (GdmGreeterClient  *client,
+-                                const char        *text,
+-                                GdmGreeterSession *session)
+-{
+-        g_debug ("GdmGreeterSession: default layout name changed: %s", text);
+-        gdm_greeter_panel_set_keyboard_layout (GDM_GREETER_PANEL (session->priv->panel),
+-                                               text);
+-}
+-
+-static void
+ on_default_session_name_changed (GdmGreeterClient  *client,
+                                  const char        *text,
+                                  GdmGreeterSession *session)
+@@ -287,14 +277,6 @@ on_select_language (GdmGreeterSession     *session,
+ }
+ 
+ static void
+-on_select_layout (GdmGreeterSession      *session,
+-                  const char             *text)
+-{
+-        gdm_greeter_client_call_select_layout (session->priv->client,
+-                                               text);
+-}
+-
+-static void
+ on_select_user (GdmGreeterLoginWindow *login_window,
+                 const char            *text,
+                 GdmGreeterSession     *session)
+@@ -389,11 +371,6 @@ toggle_panel (GdmGreeterSession *session,
+                                           session);
+ 
+                 g_signal_connect_swapped (session->priv->panel,
+-                                          "layout-selected",
+-                                          G_CALLBACK (on_select_layout),
+-                                          session);
+-
+-                g_signal_connect_swapped (session->priv->panel,
+                                           "session-selected",
+                                           G_CALLBACK (on_select_session),
+                                           session);
+@@ -693,10 +670,6 @@ gdm_greeter_session_init (GdmGreeterSession *session)
+                           G_CALLBACK (on_default_language_name_changed),
+                           session);
+         g_signal_connect (session->priv->client,
+-                          "default-layout-name-changed",
+-                          G_CALLBACK (on_default_layout_name_changed),
+-                          session);
+-        g_signal_connect (session->priv->client,
+                           "default-session-name-changed",
+                           G_CALLBACK (on_default_session_name_changed),
+                           session);
+diff --git a/gui/simple-greeter/gdm-layout-chooser-dialog.c b/gui/simple-greeter/gdm-layout-chooser-dialog.c
+deleted file mode 100644
+index 16c39bb..0000000
+--- a/gui/simple-greeter/gdm-layout-chooser-dialog.c
++++ /dev/null
+@@ -1,197 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright (C) 2008 Matthias Clasen <mclasen@redhat.com>
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- */
+-
+-#include "config.h"
+-
+-#include <stdlib.h>
+-#include <stdio.h>
+-#include <unistd.h>
+-#include <string.h>
+-
+-#include <locale.h>
+-
+-#include <glib.h>
+-#include <glib/gi18n.h>
+-#include <glib-object.h>
+-#include <gtk/gtk.h>
+-
+-#include "gdm-layout-chooser-widget.h"
+-#include "gdm-layout-chooser-dialog.h"
+-
+-#define GDM_LAYOUT_CHOOSER_DIALOG_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GDM_TYPE_LAYOUT_CHOOSER_DIALOG, GdmLayoutChooserDialogPrivate))
+-
+-struct GdmLayoutChooserDialogPrivate
+-{
+-        GtkWidget *chooser_widget;
+-};
+-
+-
+-static void     gdm_layout_chooser_dialog_class_init  (GdmLayoutChooserDialogClass *klass);
+-static void     gdm_layout_chooser_dialog_init        (GdmLayoutChooserDialog      *layout_chooser_dialog);
+-static void     gdm_layout_chooser_dialog_finalize    (GObject                       *object);
+-
+-G_DEFINE_TYPE (GdmLayoutChooserDialog, gdm_layout_chooser_dialog, GTK_TYPE_DIALOG)
+-
+-char *
+-gdm_layout_chooser_dialog_get_current_layout_name (GdmLayoutChooserDialog *dialog)
+-{
+-        char *layout_name;
+-
+-        g_return_val_if_fail (GDM_IS_LAYOUT_CHOOSER_DIALOG (dialog), NULL);
+-
+-        layout_name = gdm_layout_chooser_widget_get_current_layout_name (GDM_LAYOUT_CHOOSER_WIDGET (dialog->priv->chooser_widget));
+-
+-        return layout_name;
+-}
+-
+-void
+-gdm_layout_chooser_dialog_set_current_layout_name (GdmLayoutChooserDialog *dialog,
+-                                                   const char             *layout_name)
+-{
+-
+-        g_return_if_fail (GDM_IS_LAYOUT_CHOOSER_DIALOG (dialog));
+-
+-        gdm_layout_chooser_widget_set_current_layout_name (GDM_LAYOUT_CHOOSER_WIDGET (dialog->priv->chooser_widget), layout_name);
+-}
+-
+-static void
+-gdm_layout_chooser_dialog_size_request (GtkWidget      *widget,
+-                                        GtkRequisition *requisition)
+-{
+-        int            screen_w;
+-        int            screen_h;
+-        GtkRequisition child_requisition;
+-
+-        if (GTK_WIDGET_CLASS (gdm_layout_chooser_dialog_parent_class)->size_request) {
+-                GTK_WIDGET_CLASS (gdm_layout_chooser_dialog_parent_class)->size_request (widget, requisition);
+-        }
+-
+-        screen_w = gdk_screen_get_width (gtk_widget_get_screen (widget));
+-        screen_h = gdk_screen_get_height (gtk_widget_get_screen (widget));
+-
+-        gtk_widget_get_child_requisition (GTK_BIN (widget)->child, &child_requisition);
+-        *requisition = child_requisition;
+-
+-        requisition->width += 2 * GTK_CONTAINER (widget)->border_width;
+-        requisition->height += 2 * GTK_CONTAINER (widget)->border_width;
+-
+-        requisition->width = MIN (requisition->width, .50 * screen_w);
+-        requisition->height = MIN (requisition->height, .80 * screen_h);
+-}
+-
+-static void
+-gdm_layout_chooser_dialog_realize (GtkWidget *widget)
+-{
+-        GdmLayoutChooserDialog *chooser_dialog;
+-
+-        chooser_dialog = GDM_LAYOUT_CHOOSER_DIALOG (widget);
+-
+-        gtk_widget_show (chooser_dialog->priv->chooser_widget);
+-
+-        GTK_WIDGET_CLASS (gdm_layout_chooser_dialog_parent_class)->realize (widget);
+-}
+-
+-static void
+-gdm_layout_chooser_dialog_class_init (GdmLayoutChooserDialogClass *klass)
+-{
+-        GObjectClass   *object_class = G_OBJECT_CLASS (klass);
+-        GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+-
+-        object_class->finalize = gdm_layout_chooser_dialog_finalize;
+-        widget_class->size_request = gdm_layout_chooser_dialog_size_request;
+-        widget_class->realize = gdm_layout_chooser_dialog_realize;
+-
+-        g_type_class_add_private (klass, sizeof (GdmLayoutChooserDialogPrivate));
+-}
+-
+-static gboolean
+-respond (GdmLayoutChooserDialog *dialog)
+-{
+-        gtk_dialog_response (GTK_DIALOG (dialog), GTK_RESPONSE_OK);
+-
+-        return FALSE;
+-}
+-
+-static void
+-queue_response (GdmLayoutChooserDialog *dialog)
+-{
+-        g_idle_add ((GSourceFunc) respond, dialog);
+-}
+-
+-static void
+-gdm_layout_chooser_dialog_init (GdmLayoutChooserDialog *dialog)
+-{
+-
+-        dialog->priv = GDM_LAYOUT_CHOOSER_DIALOG_GET_PRIVATE (dialog);
+-
+-        dialog->priv->chooser_widget = gdm_layout_chooser_widget_new ();
+-        gdm_chooser_widget_set_hide_inactive_items (GDM_CHOOSER_WIDGET (dialog->priv->chooser_widget),
+-                                                    FALSE);
+-
+-        gdm_layout_chooser_widget_set_current_layout_name (GDM_LAYOUT_CHOOSER_WIDGET (dialog->priv->chooser_widget),
+-                                                               setlocale (LC_MESSAGES, NULL));
+-        gtk_container_add (GTK_CONTAINER (GTK_DIALOG (dialog)->vbox), dialog->priv->chooser_widget);
+-
+-        g_signal_connect_swapped (G_OBJECT (dialog->priv->chooser_widget),
+-                                  "activated", G_CALLBACK (queue_response),
+-                                  dialog);
+-
+-        gtk_dialog_add_buttons (GTK_DIALOG (dialog),
+-                                GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+-                                GTK_STOCK_OK, GTK_RESPONSE_OK,
+-                                NULL);
+-
+-        gtk_dialog_set_has_separator (GTK_DIALOG (dialog), FALSE);
+-        gtk_container_set_border_width (GTK_CONTAINER (dialog), 12);
+-        gtk_container_set_border_width (GTK_CONTAINER (dialog->priv->chooser_widget), 5);
+-        gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_CENTER_ALWAYS);
+-        gtk_window_set_default_size (GTK_WINDOW (dialog), 512, 440);
+-        gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_OK);
+-}
+-
+-static void
+-gdm_layout_chooser_dialog_finalize (GObject *object)
+-{
+-        GdmLayoutChooserDialog *layout_chooser_dialog;
+-
+-        g_return_if_fail (object != NULL);
+-        g_return_if_fail (GDM_IS_LAYOUT_CHOOSER_DIALOG (object));
+-
+-        layout_chooser_dialog = GDM_LAYOUT_CHOOSER_DIALOG (object);
+-
+-        g_return_if_fail (layout_chooser_dialog->priv != NULL);
+-
+-        G_OBJECT_CLASS (gdm_layout_chooser_dialog_parent_class)->finalize (object);
+-}
+-
+-GtkWidget *
+-gdm_layout_chooser_dialog_new (void)
+-{
+-        GObject *object;
+-
+-        object = g_object_new (GDM_TYPE_LAYOUT_CHOOSER_DIALOG,
+-                               "icon-name", "preferences-desktop-keyboard",
+-                               "title", _("Keyboard layouts"),
+-                               "border-width", 8,
+-                               "modal", TRUE,
+-                               NULL);
+-
+-        return GTK_WIDGET (object);
+-}
+diff --git a/gui/simple-greeter/gdm-layout-chooser-dialog.h b/gui/simple-greeter/gdm-layout-chooser-dialog.h
+deleted file mode 100644
+index 982e74e..0000000
+--- a/gui/simple-greeter/gdm-layout-chooser-dialog.h
++++ /dev/null
+@@ -1,59 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright (C) 2008 Matthias Clasen <mclasen@redhat.com>
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- */
+-
+-#ifndef __GDM_LAYOUT_CHOOSER_DIALOG_H
+-#define __GDM_LAYOUT_CHOOSER_DIALOG_H
+-
+-#include <glib-object.h>
+-#include <gtk/gtk.h>
+-
+-G_BEGIN_DECLS
+-
+-#define GDM_TYPE_LAYOUT_CHOOSER_DIALOG         (gdm_layout_chooser_dialog_get_type ())
+-#define GDM_LAYOUT_CHOOSER_DIALOG(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), GDM_TYPE_LAYOUT_CHOOSER_DIALOG, GdmLayoutChooserDialog))
+-#define GDM_LAYOUT_CHOOSER_DIALOG_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST((k), GDM_TYPE_LAYOUT_CHOOSER_DIALOG, GdmLayoutChooserDialogClass))
+-#define GDM_IS_LAYOUT_CHOOSER_DIALOG(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), GDM_TYPE_LAYOUT_CHOOSER_DIALOG))
+-#define GDM_IS_LAYOUT_CHOOSER_DIALOG_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), GDM_TYPE_LAYOUT_CHOOSER_DIALOG))
+-#define GDM_LAYOUT_CHOOSER_DIALOG_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o), GDM_TYPE_LAYOUT_CHOOSER_DIALOG, GdmLayoutChooserDialogClass))
+-
+-typedef struct GdmLayoutChooserDialogPrivate GdmLayoutChooserDialogPrivate;
+-
+-typedef struct
+-{
+-        GtkDialog                        parent;
+-        GdmLayoutChooserDialogPrivate *priv;
+-} GdmLayoutChooserDialog;
+-
+-typedef struct
+-{
+-        GtkDialogClass   parent_class;
+-} GdmLayoutChooserDialogClass;
+-
+-GType                  gdm_layout_chooser_dialog_get_type                       (void);
+-
+-GtkWidget            * gdm_layout_chooser_dialog_new                            (void);
+-
+-char *                 gdm_layout_chooser_dialog_get_current_layout_name      (GdmLayoutChooserDialog *dialog);
+-void                   gdm_layout_chooser_dialog_set_current_layout_name      (GdmLayoutChooserDialog *dialog,
+-     const char               *layout_name);
+-
+-G_END_DECLS
+-
+-#endif /* __GDM_LAYOUT_CHOOSER_DIALOG_H */
+diff --git a/gui/simple-greeter/gdm-layout-chooser-widget.c b/gui/simple-greeter/gdm-layout-chooser-widget.c
+deleted file mode 100644
+index 9d85eb1..0000000
+--- a/gui/simple-greeter/gdm-layout-chooser-widget.c
++++ /dev/null
+@@ -1,207 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright (C) 2008 Matthias Clasen <mclasen@redhat.com>
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- */
+-
+-#include "config.h"
+-
+-#include <stdlib.h>
+-#include <stdio.h>
+-#include <unistd.h>
+-#include <string.h>
+-#include <errno.h>
+-#include <dirent.h>
+-#include <locale.h>
+-#include <sys/stat.h>
+-
+-#include <fontconfig/fontconfig.h>
+-
+-#include <glib.h>
+-#include <glib/gi18n.h>
+-#include <glib/gstdio.h>
+-#include <gtk/gtk.h>
+-
+-#include "gdm-layout-chooser-widget.h"
+-#include "gdm-chooser-widget.h"
+-#include "gdm-layouts.h"
+-
+-#define GDM_LAYOUT_CHOOSER_WIDGET_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GDM_TYPE_LAYOUT_CHOOSER_WIDGET, GdmLayoutChooserWidgetPrivate))
+-
+-struct GdmLayoutChooserWidgetPrivate
+-{
+-        guint               layouts_added : 1;
+-};
+-
+-static void     gdm_layout_chooser_widget_class_init  (GdmLayoutChooserWidgetClass *klass);
+-static void     gdm_layout_chooser_widget_init        (GdmLayoutChooserWidget      *layout_chooser_widget);
+-static void     gdm_layout_chooser_widget_finalize    (GObject                     *object);
+-
+-G_DEFINE_TYPE (GdmLayoutChooserWidget, gdm_layout_chooser_widget, GDM_TYPE_CHOOSER_WIDGET)
+-
+-enum {
+-        CHOOSER_LIST_TITLE_COLUMN = 0,
+-        CHOOSER_LIST_TRANSLATED_COLUMN,
+-        CHOOSER_LIST_LOCALE_COLUMN
+-};
+-
+-char *
+-gdm_layout_chooser_widget_get_current_layout_name (GdmLayoutChooserWidget *widget)
+-{
+-        char *id;
+-
+-        g_return_val_if_fail (GDM_IS_LAYOUT_CHOOSER_WIDGET (widget), NULL);
+-
+-        id = gdm_chooser_widget_get_selected_item (GDM_CHOOSER_WIDGET (widget));
+-
+-        if (id == NULL) {
+-                id = g_strdup ("us");
+-        }
+-
+-        return id;
+-}
+-
+-void
+-gdm_layout_chooser_widget_set_current_layout_name (GdmLayoutChooserWidget *widget,
+-                                                   const char             *id)
+-{
+-        g_return_if_fail (GDM_IS_LAYOUT_CHOOSER_WIDGET (widget));
+-
+-        if (id == NULL) {
+-                gdm_chooser_widget_set_selected_item (GDM_CHOOSER_WIDGET (widget),
+-                                                      NULL);
+-                return;
+-        }
+-
+-        gdm_chooser_widget_set_selected_item (GDM_CHOOSER_WIDGET (widget), id);
+-}
+-
+-static void
+-gdm_layout_chooser_widget_add_layout (GdmLayoutChooserWidget *widget,
+-                                          const char         *name)
+-{
+-        char *layout;
+-        char *escaped;
+-
+-        layout = gdm_get_layout_from_name (name);
+-
+-        if (layout != NULL) {
+-                escaped = g_markup_escape_text (layout, -1);
+-                gdm_chooser_widget_add_item (GDM_CHOOSER_WIDGET (widget),
+-                                             name,
+-                                             NULL,
+-                                             escaped,
+-                                             NULL,
+-                                             0,
+-                                             FALSE,
+-                                             FALSE,
+-                                             NULL,
+-                                             NULL);
+-                g_free (escaped);
+-                g_free (layout);
+-        }
+-}
+-
+-static void
+-add_available_layouts (GdmLayoutChooserWidget *widget)
+-{
+-        char **layout_names;
+-        int    i;
+-
+-        layout_names = gdm_get_all_layout_names ();
+-
+-        if (layout_names == NULL)
+-           return;
+-
+-        for (i = 0; layout_names[i] != NULL; i++) {
+-                gdm_layout_chooser_widget_add_layout (widget,
+-                                                      layout_names[i]);
+-        }
+-
+-        g_strfreev (layout_names);
+-}
+-
+-static void
+-gdm_layout_chooser_widget_dispose (GObject *object)
+-{
+-        G_OBJECT_CLASS (gdm_layout_chooser_widget_parent_class)->dispose (object);
+-}
+-
+-static void
+-gdm_layout_chooser_widget_realize (GtkWidget *widget)
+-{
+-        GdmLayoutChooserWidget *chooser;
+-
+-        chooser = GDM_LAYOUT_CHOOSER_WIDGET (widget);
+-
+-        GTK_WIDGET_CLASS (gdm_layout_chooser_widget_parent_class)->realize (widget);
+-
+-        if (!chooser->priv->layouts_added) {
+-                add_available_layouts (chooser);
+-                chooser->priv->layouts_added = TRUE;
+-        }
+-}
+-
+-static void
+-gdm_layout_chooser_widget_class_init (GdmLayoutChooserWidgetClass *klass)
+-{
+-        GObjectClass   *object_class = G_OBJECT_CLASS (klass);
+-        GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+-
+-        object_class->dispose = gdm_layout_chooser_widget_dispose;
+-        object_class->finalize = gdm_layout_chooser_widget_finalize;
+-        widget_class->realize = gdm_layout_chooser_widget_realize;
+-
+-        g_type_class_add_private (klass, sizeof (GdmLayoutChooserWidgetPrivate));
+-}
+-
+-static void
+-gdm_layout_chooser_widget_init (GdmLayoutChooserWidget *widget)
+-{
+-        widget->priv = GDM_LAYOUT_CHOOSER_WIDGET_GET_PRIVATE (widget);
+-
+-        gdm_chooser_widget_set_separator_position (GDM_CHOOSER_WIDGET (widget),
+-                                                   GDM_CHOOSER_WIDGET_POSITION_TOP);
+-}
+-
+-static void
+-gdm_layout_chooser_widget_finalize (GObject *object)
+-{
+-        GdmLayoutChooserWidget *layout_chooser_widget;
+-
+-        g_return_if_fail (object != NULL);
+-        g_return_if_fail (GDM_IS_LAYOUT_CHOOSER_WIDGET (object));
+-
+-        layout_chooser_widget = GDM_LAYOUT_CHOOSER_WIDGET (object);
+-
+-        g_return_if_fail (layout_chooser_widget->priv != NULL);
+-
+-        G_OBJECT_CLASS (gdm_layout_chooser_widget_parent_class)->finalize (object);
+-}
+-
+-GtkWidget *
+-gdm_layout_chooser_widget_new (void)
+-{
+-        GObject *object;
+-
+-        object = g_object_new (GDM_TYPE_LAYOUT_CHOOSER_WIDGET,
+-                               "inactive-text", _("_Keyboard:"),
+-                               "active-text", _("_Keyboard:"),
+-                               NULL);
+-
+-        return GTK_WIDGET (object);
+-}
+diff --git a/gui/simple-greeter/gdm-layout-chooser-widget.h b/gui/simple-greeter/gdm-layout-chooser-widget.h
+deleted file mode 100644
+index 5dd4447..0000000
+--- a/gui/simple-greeter/gdm-layout-chooser-widget.h
++++ /dev/null
+@@ -1,58 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright (C) 2008 Matthias Clasen <mclasen@redhat.com>
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- */
+-
+-#ifndef __GDM_LAYOUT_CHOOSER_WIDGET_H
+-#define __GDM_LAYOUT_CHOOSER_WIDGET_H
+-
+-#include <glib-object.h>
+-#include "gdm-chooser-widget.h"
+-
+-G_BEGIN_DECLS
+-
+-#define GDM_TYPE_LAYOUT_CHOOSER_WIDGET         (gdm_layout_chooser_widget_get_type ())
+-#define GDM_LAYOUT_CHOOSER_WIDGET(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), GDM_TYPE_LAYOUT_CHOOSER_WIDGET, GdmLayoutChooserWidget))
+-#define GDM_LAYOUT_CHOOSER_WIDGET_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST((k), GDM_TYPE_LAYOUT_CHOOSER_WIDGET, GdmLayoutChooserWidgetClass))
+-#define GDM_IS_LAYOUT_CHOOSER_WIDGET(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), GDM_TYPE_LAYOUT_CHOOSER_WIDGET))
+-#define GDM_IS_LAYOUT_CHOOSER_WIDGET_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), GDM_TYPE_LAYOUT_CHOOSER_WIDGET))
+-#define GDM_LAYOUT_CHOOSER_WIDGET_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o), GDM_TYPE_LAYOUT_CHOOSER_WIDGET, GdmLayoutChooserWidgetClass))
+-
+-typedef struct GdmLayoutChooserWidgetPrivate GdmLayoutChooserWidgetPrivate;
+-
+-typedef struct
+-{
+-        GdmChooserWidget                 parent;
+-        GdmLayoutChooserWidgetPrivate *priv;
+-} GdmLayoutChooserWidget;
+-
+-typedef struct
+-{
+-        GdmChooserWidgetClass   parent_class;
+-} GdmLayoutChooserWidgetClass;
+-
+-GType                  gdm_layout_chooser_widget_get_type                       (void);
+-GtkWidget *            gdm_layout_chooser_widget_new                            (void);
+-
+-char *                 gdm_layout_chooser_widget_get_current_layout_name      (GdmLayoutChooserWidget *widget);
+-void                   gdm_layout_chooser_widget_set_current_layout_name      (GdmLayoutChooserWidget *widget,
+-                                                                                   const char               *name);
+-
+-G_END_DECLS
+-
+-#endif /* __GDM_LAYOUT_CHOOSER_WIDGET_H */
+diff --git a/gui/simple-greeter/gdm-layout-option-widget.c b/gui/simple-greeter/gdm-layout-option-widget.c
+deleted file mode 100644
+index 7aceea2..0000000
+--- a/gui/simple-greeter/gdm-layout-option-widget.c
++++ /dev/null
+@@ -1,294 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright (C) 2008 Red Hat, Inc.
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- * Written by: Matthias Clasen <mclasen@redhat.com>
+- *
+- */
+-
+-#include "config.h"
+-
+-#include <stdlib.h>
+-#include <stdio.h>
+-#include <unistd.h>
+-#include <string.h>
+-#include <errno.h>
+-#include <dirent.h>
+-#include <sys/stat.h>
+-
+-#include <glib.h>
+-#include <glib/gi18n.h>
+-#include <glib/gstdio.h>
+-#include <gtk/gtk.h>
+-
+-#include "gdm-profile.h"
+-#include "gdm-layouts.h"
+-#include "gdm-layout-option-widget.h"
+-#include "gdm-recent-option-widget.h"
+-#include "gdm-layout-chooser-dialog.h"
+-
+-#define GDM_LAYOUT_OPTION_WIDGET_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GDM_TYPE_LAYOUT_OPTION_WIDGET, GdmLayoutOptionWidgetPrivate))
+-
+-struct GdmLayoutOptionWidgetPrivate
+-{
+-        GtkWidget *dialog;
+-};
+-
+-enum {
+-        LAYOUT_ACTIVATED,
+-        NUMBER_OF_SIGNALS
+-};
+-
+-static guint signals [NUMBER_OF_SIGNALS] = { 0, };
+-
+-static void     gdm_layout_option_widget_class_init  (GdmLayoutOptionWidgetClass *klass);
+-static void     gdm_layout_option_widget_init        (GdmLayoutOptionWidget      *layout_option_widget);
+-static void     gdm_layout_option_widget_finalize    (GObject                     *object);
+-static void     gdm_layout_option_widget_hide_dialog (GdmLayoutOptionWidget       *widget);
+-
+-G_DEFINE_TYPE (GdmLayoutOptionWidget, gdm_layout_option_widget, GDM_TYPE_RECENT_OPTION_WIDGET)
+-
+-static void
+-gdm_layout_option_widget_set_layout_from_dialog (GdmLayoutOptionWidget *widget)
+-{
+-        char *layout_name;
+-
+-        layout_name = gdm_layout_chooser_dialog_get_current_layout_name (GDM_LAYOUT_CHOOSER_DIALOG (widget->priv->dialog));
+-        g_debug ("GdmLayoutOptionWidget: Setting layout from dialog: '%s'", layout_name);
+-
+-        gdm_layout_option_widget_set_current_layout_name (widget, layout_name);
+-        g_free (layout_name);
+-}
+-
+-static void
+-on_dialog_response (GtkDialog             *dialog,
+-                    int                    response_id,
+-                    GdmLayoutOptionWidget *widget)
+-{
+-        g_debug ("GdmLayoutOptionWidget: Got response from dialog: '%d'", response_id);
+-
+-        switch (response_id) {
+-                case GTK_RESPONSE_OK:
+-                        gdm_layout_option_widget_set_layout_from_dialog (widget);
+-                        break;
+-                default:
+-                        break;
+-        }
+-
+-        gdm_layout_option_widget_hide_dialog (widget);
+-}
+-
+-static void
+-gdm_layout_option_widget_hide_dialog (GdmLayoutOptionWidget *widget)
+-{
+-        gtk_widget_destroy (widget->priv->dialog);
+-        widget->priv->dialog = NULL;
+-}
+-
+-static void
+-create_dialog (GdmLayoutOptionWidget *widget)
+-{
+-        gdm_profile_start (NULL);
+-
+-        g_assert (widget->priv->dialog == NULL);
+-
+-        widget->priv->dialog = gdm_layout_chooser_dialog_new ();
+-
+-        gdm_profile_end (NULL);
+-}
+-
+-static void
+-gdm_layout_option_widget_show_dialog (GdmLayoutOptionWidget *widget,
+-                                      const char            *active_item_id)
+-{
+-        if (widget->priv->dialog == NULL) {
+-                create_dialog (widget);
+-        }
+-
+-        g_signal_connect (GTK_DIALOG (widget->priv->dialog),
+-                          "response",
+-                          G_CALLBACK (on_dialog_response),
+-                          widget);
+-
+-        gtk_widget_show_all (GTK_WIDGET (widget->priv->dialog));
+-
+-        gdm_layout_chooser_dialog_set_current_layout_name (GDM_LAYOUT_CHOOSER_DIALOG (GDM_LAYOUT_OPTION_WIDGET (widget)->priv->dialog),
+-                                                           active_item_id);
+-}
+-
+-static void
+-gdm_layout_option_widget_activated (GdmOptionWidget *widget)
+-{
+-        char *active_item_id;
+-
+-        active_item_id = gdm_option_widget_get_active_item (GDM_OPTION_WIDGET (widget));
+-        if (active_item_id == NULL) {
+-                return;
+-        }
+-
+-        if (strcmp (active_item_id, "__other") == 0) {
+-                g_free (active_item_id);
+-
+-                active_item_id = gdm_option_widget_get_default_item (widget);
+-                gdm_layout_option_widget_set_current_layout_name (GDM_LAYOUT_OPTION_WIDGET (widget), active_item_id);
+-                gdm_layout_option_widget_show_dialog (GDM_LAYOUT_OPTION_WIDGET (widget), active_item_id);
+-        }
+-
+-        g_signal_emit (G_OBJECT (widget), signals[LAYOUT_ACTIVATED], 0);
+-
+-        g_free (active_item_id);
+-}
+-
+-static void
+-gdm_layout_option_widget_class_init (GdmLayoutOptionWidgetClass *klass)
+-{
+-        GObjectClass         *object_class = G_OBJECT_CLASS (klass);
+-        GdmOptionWidgetClass *option_widget_class = GDM_OPTION_WIDGET_CLASS (klass);
+-
+-        object_class->finalize = gdm_layout_option_widget_finalize;
+-
+-        option_widget_class->activated = gdm_layout_option_widget_activated;
+-
+-        signals[LAYOUT_ACTIVATED] = g_signal_new ("layout-activated",
+-                                                  G_TYPE_FROM_CLASS (object_class),
+-                                                  G_SIGNAL_RUN_FIRST,
+-                                                  G_STRUCT_OFFSET (GdmLayoutOptionWidgetClass, layout_activated),
+-                                                  NULL,
+-                                                  NULL,
+-                                                  g_cclosure_marshal_VOID__VOID,
+-                                                  G_TYPE_NONE,
+-                                                  0);
+-
+-        g_type_class_add_private (klass, sizeof (GdmLayoutOptionWidgetPrivate));
+-}
+-
+-static char *
+-gdm_layout_option_widget_lookup_item (GdmRecentOptionWidget *widget,
+-                                      const char            *key,
+-                                      char                 **name,
+-                                      char                 **comment)
+-{
+-        char *layout;
+-
+-        layout = gdm_get_layout_from_name (key);
+-
+-        if (layout == NULL) {
+-                return NULL;
+-        }
+-
+-        *name = layout;
+-        *comment = NULL;
+-
+-        return g_strdup (key);
+-}
+-
+-static void
+-gdm_layout_option_widget_init (GdmLayoutOptionWidget *widget)
+-{
+-        GError *error;
+-
+-        widget->priv = GDM_LAYOUT_OPTION_WIDGET_GET_PRIVATE (widget);
+-
+-        error = NULL;
+-        gdm_recent_option_widget_set_gconf_key (GDM_RECENT_OPTION_WIDGET (widget),
+-                                                "/apps/gdm/simple-greeter/recent-layouts",
+-                                                gdm_layout_option_widget_lookup_item,
+-                                                &error);
+-
+-        if (error != NULL) {
+-                g_warning ("Could not read recent layouts from gconf: %s",
+-                           error->message);
+-                g_error_free (error);
+-        }
+-
+-        gdm_option_widget_add_item (GDM_OPTION_WIDGET (widget),
+-                                    "__other",
+-                                    /* translators: This brings up a dialog of
+-                                     * available keyboard layouts
+-                                     */
+-                                    C_("keyboard", "Other..."),
+-                                    _("Choose a keyboard layout from the "
+-                                      "full list of available layouts."),
+-                                    GDM_OPTION_WIDGET_POSITION_BOTTOM);
+-}
+-
+-static void
+-gdm_layout_option_widget_finalize (GObject *object)
+-{
+-        GdmLayoutOptionWidget *layout_option_widget;
+-
+-        g_return_if_fail (object != NULL);
+-        g_return_if_fail (GDM_IS_LAYOUT_OPTION_WIDGET (object));
+-
+-        layout_option_widget = GDM_LAYOUT_OPTION_WIDGET (object);
+-
+-        g_return_if_fail (layout_option_widget->priv != NULL);
+-
+-        if (layout_option_widget->priv->dialog != NULL) {
+-                gtk_widget_destroy (layout_option_widget->priv->dialog);
+-        }
+-
+-        G_OBJECT_CLASS (gdm_layout_option_widget_parent_class)->finalize (object);
+-}
+-
+-GtkWidget *
+-gdm_layout_option_widget_new (void)
+-{
+-        GObject *object;
+-
+-        object = g_object_new (GDM_TYPE_LAYOUT_OPTION_WIDGET,
+-                               "label-text", _("Keyboard"),
+-                               "icon-name", "preferences-desktop-keyboard",
+-                               "max-item-count", 8,
+-                               NULL);
+-
+-        return GTK_WIDGET (object);
+-}
+-
+-char *
+-gdm_layout_option_widget_get_current_layout_name (GdmLayoutOptionWidget *widget)
+-{
+-        char *active_item_id;
+-
+-        active_item_id = gdm_option_widget_get_active_item (GDM_OPTION_WIDGET (widget));
+-        if (active_item_id == NULL) {
+-                return NULL;
+-        }
+-
+-        if (strcmp (active_item_id, "__other") == 0) {
+-                g_free (active_item_id);
+-                return NULL;
+-        }
+-
+-        return active_item_id;
+-}
+-
+-void
+-gdm_layout_option_widget_set_current_layout_name (GdmLayoutOptionWidget *widget,
+-                                                  const char            *id)
+-{
+-        g_return_if_fail (GDM_IS_LAYOUT_OPTION_WIDGET (widget));
+-
+-        if (id != NULL &&
+-            !gdm_option_widget_lookup_item (GDM_OPTION_WIDGET (widget),
+-                                            id, NULL, NULL, NULL)) {
+-                gdm_recent_option_widget_add_item (GDM_RECENT_OPTION_WIDGET (widget),
+-                                                   id);
+-        }
+-        g_debug ("GdmLayoutOptionWidget: Setting active item: '%s'", id);
+-        gdm_option_widget_set_active_item (GDM_OPTION_WIDGET (widget), id);
+-}
+diff --git a/gui/simple-greeter/gdm-layout-option-widget.h b/gui/simple-greeter/gdm-layout-option-widget.h
+deleted file mode 100644
+index 8dba3b6..0000000
+--- a/gui/simple-greeter/gdm-layout-option-widget.h
++++ /dev/null
+@@ -1,62 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright (C) 2008 Red Hat, Inc.
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- *  Written by: Ray Strode <rstrode@redhat.com>
+- */
+-
+-#ifndef __GDM_LAYOUT_OPTION_WIDGET_H
+-#define __GDM_LAYOUT_OPTION_WIDGET_H
+-
+-#include <glib-object.h>
+-
+-#include "gdm-recent-option-widget.h"
+-
+-G_BEGIN_DECLS
+-
+-#define GDM_TYPE_LAYOUT_OPTION_WIDGET         (gdm_layout_option_widget_get_type ())
+-#define GDM_LAYOUT_OPTION_WIDGET(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), GDM_TYPE_LAYOUT_OPTION_WIDGET, GdmLayoutOptionWidget))
+-#define GDM_LAYOUT_OPTION_WIDGET_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST((k), GDM_TYPE_LAYOUT_OPTION_WIDGET, GdmLayoutOptionWidgetClass))
+-#define GDM_IS_LAYOUT_OPTION_WIDGET(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), GDM_TYPE_LAYOUT_OPTION_WIDGET))
+-#define GDM_IS_LAYOUT_OPTION_WIDGET_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), GDM_TYPE_LAYOUT_OPTION_WIDGET))
+-#define GDM_LAYOUT_OPTION_WIDGET_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o), GDM_TYPE_LAYOUT_OPTION_WIDGET, GdmLayoutOptionWidgetClass))
+-
+-typedef struct GdmLayoutOptionWidgetPrivate GdmLayoutOptionWidgetPrivate;
+-
+-typedef struct
+-{
+-        GdmRecentOptionWidget          parent;
+-        GdmLayoutOptionWidgetPrivate *priv;
+-} GdmLayoutOptionWidget;
+-
+-typedef struct
+-{
+-        GdmRecentOptionWidgetClass    parent_class;
+-
+-        void (* layout_activated)        (GdmLayoutOptionWidget *widget);
+-} GdmLayoutOptionWidgetClass;
+-
+-GType                  gdm_layout_option_widget_get_type               (void);
+-GtkWidget *            gdm_layout_option_widget_new                    (void);
+-
+-char *                 gdm_layout_option_widget_get_current_layout_name      (GdmLayoutOptionWidget *widget);
+-void                   gdm_layout_option_widget_set_current_layout_name      (GdmLayoutOptionWidget *widget,
+-                                                                                  const char              *name);
+-
+-
+-
+-#endif /* __GDM_LAYOUT_OPTION_WIDGET_H */
+diff --git a/gui/simple-greeter/gdm-layouts.c b/gui/simple-greeter/gdm-layouts.c
+deleted file mode 100644
+index 5f9aea2..0000000
+--- a/gui/simple-greeter/gdm-layouts.c
++++ /dev/null
+@@ -1,274 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright 2008  Red Hat, Inc,
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- * Written by : Matthias Clasen
+- */
+-
+-#include "config.h"
+-
+-#include <string.h>
+-
+-#include <glib.h>
+-
+-#include <gdk/gdkx.h>
+-
+-#ifdef HAVE_LIBXKLAVIER
+-#include <libxklavier/xklavier.h>
+-#endif
+-
+-#include <gconf/gconf-client.h>
+-
+-#include "gdm-layouts.h"
+-
+-typedef struct {
+-        GSList *list;
+-        const char *layout;
+-} LayoutData;
+-
+-#ifdef HAVE_LIBXKLAVIER
+-static XklEngine         *engine = NULL;
+-static XklConfigRegistry *config_registry = NULL;
+-static XklConfigRec      *initial_config = NULL;
+-
+-static void
+-init_xkl (void)
+-{
+-        if (config_registry == NULL) {
+-                engine = xkl_engine_get_instance (GDK_DISPLAY ());
+-                config_registry = xkl_config_registry_get_instance (engine);
+-                xkl_config_registry_load (config_registry, FALSE);
+-
+-                initial_config = xkl_config_rec_new ();
+-                if (!xkl_config_rec_get_from_server (initial_config, engine)) {
+-                        g_warning ("failed to load XKB configuration");
+-                        initial_config->model = g_strdup ("pc105");
+-                }
+-        }
+-}
+-
+-static char *
+-xci_desc_to_utf8 (XklConfigItem * ci)
+-{
+-        char *sd = g_strstrip (ci->description);
+-        return sd[0] == 0 ? g_strdup (ci->name) :
+-                g_locale_to_utf8 (sd, -1, NULL, NULL, NULL);
+-}
+-
+-static void
+-add_variant (XklConfigRegistry   *config,
+-             const XklConfigItem *item,
+-             gpointer             data)
+-{
+-        LayoutData *ldata = data;
+-
+-        ldata->list = g_slist_prepend (ldata->list, g_strdup_printf  ("%s\t%s", ldata->layout, item->name));
+-}
+-
+-static void
+-add_layout (XklConfigRegistry   *config,
+-            const XklConfigItem *item,
+-            gpointer             data)
+-{
+-        LayoutData *ldata = data;
+-
+-        ldata->layout = item->name;
+-        ldata->list = g_slist_prepend (ldata->list, g_strdup (item->name));
+-        xkl_config_registry_foreach_layout_variant (config, item->name, add_variant, data);
+-        ldata->layout = NULL;
+-}
+-#endif
+-
+-gchar *
+-gdm_get_layout_from_name (const char *name)
+-{
+-#ifdef HAVE_LIBXKLAVIER
+-        XklConfigItem *item;
+-        char          *layout;
+-        char          *variant;
+-        char          *result;
+-        char          *id1;
+-        char          *id2;
+-        char          *p;
+-
+-        init_xkl ();
+-
+-        id1 = g_strdup (name);
+-        p = strchr (id1, '\t');
+-
+-        if (p != NULL) {
+-                id2 = p + 1;
+-                *p = 0;
+-        } else {
+-                id2 = NULL;
+-        }
+-
+-        item = xkl_config_item_new ();
+-
+-        g_snprintf (item->name, XKL_MAX_CI_NAME_LENGTH, "%s", id1);
+-        if (xkl_config_registry_find_layout (config_registry, item)) {
+-                layout = xci_desc_to_utf8 (item);
+-        } else {
+-                layout =  g_strdup_printf ("Layout %s", id1);
+-        }
+-
+-        if (id2 != NULL) {
+-                g_snprintf (item->name, XKL_MAX_CI_NAME_LENGTH, "%s", id2);
+-                if (xkl_config_registry_find_variant (config_registry, id1, item))
+-                        variant = xci_desc_to_utf8 (item);
+-                else
+-                        variant = g_strdup_printf ("Variant %s", id2);
+-        } else {
+-                variant = NULL;
+-        }
+-
+-        g_object_unref (item);
+-
+-        g_free (id1);
+-
+-        if (variant != NULL) {
+-                result = g_strdup_printf ("%s (%s)", layout, variant);
+-                g_free (layout);
+-                g_free (variant);
+-        } else {
+-                result = layout;
+-        }
+-
+-        return result;
+-#else
+-        return NULL;
+-#endif
+-}
+-
+-char **
+-gdm_get_all_layout_names (void)
+-{
+-#ifdef HAVE_LIBXKLAVIER
+-        GSList    *l;
+-        int        len;
+-        int        i;
+-        char     **layouts;
+-        LayoutData data;
+-
+-        data.list = NULL;
+-        data.layout = NULL;
+-
+-        init_xkl ();
+-
+-        xkl_config_registry_foreach_layout (config_registry, add_layout, &data);
+-
+-        len = g_slist_length (data.list);
+-
+-        layouts = g_new (char *, len + 1);
+-        layouts[len] = NULL;
+-
+-        for (i = 0, l = data.list; i < len; i++, l = l->next) {
+-                layouts[len - i - 1] = l->data;
+-        }
+-
+-        g_slist_free (data.list);
+-
+-        return layouts;
+-#else
+-        return NULL;
+-#endif
+-}
+-
+-gboolean
+-gdm_layout_is_valid (const char *layout_variant)
+-{
+-#ifdef HAVE_LIBXKLAVIER
+-        XklConfigItem *item;
+-        char          *layout;
+-        char          *variant;
+-        gboolean       retval;
+-
+-        layout = g_strdup (layout_variant);
+-        variant = strchr (layout, '\t');
+-        if (variant != NULL) {
+-                variant[0] = '\0';
+-                variant++;
+-        }
+-
+-        item = xkl_config_item_new ();
+-        g_snprintf (item->name, XKL_MAX_CI_NAME_LENGTH, "%s", layout);
+-
+-        retval = xkl_config_registry_find_layout (config_registry, item);
+-
+-        if (retval && variant != NULL) {
+-                g_snprintf (item->name, XKL_MAX_CI_NAME_LENGTH, "%s", variant);
+-                retval = xkl_config_registry_find_variant (config_registry, layout, item);
+-        }
+-
+-        g_object_unref (item);
+-        g_free (layout);
+-
+-        return retval;
+-#else
+-        return TRUE;
+-#endif
+-}
+-
+-const char *
+-gdm_layout_get_default_layout (void)
+-{
+-#ifdef HAVE_LIBXKLAVIER
+-        init_xkl ();
+-
+-        if (initial_config->layouts)
+-                return initial_config->layouts[0];
+-        else
+-                return NULL;
+-#else
+-        return NULL;
+-#endif
+-}
+-
+-void
+-gdm_layout_activate (const char *layout)
+-{
+-#ifdef HAVE_LIBXKLAVIER
+-        XklConfigRec *config;
+-        char         *p;
+-
+-        init_xkl ();
+-
+-        config = xkl_config_rec_new ();
+-        config->model = g_strdup (initial_config->model);
+-
+-        if (layout == NULL) {
+-                config->layouts = g_strdupv (initial_config->layouts);
+-                config->variants = g_strdupv (initial_config->variants);
+-                config->options = g_strdupv (initial_config->options);
+-        } else {
+-                config->layouts = g_new0 (char *, 2);
+-                config->layouts[0] = g_strdup (layout);
+-
+-                p = strchr (config->layouts[0], '\t');
+-                if (p != NULL) {
+-                        config->variants = g_new0 (char *, 2);
+-                        config->layouts[0][p - config->layouts[0]] = 0;
+-                        config->variants[0] = g_strdup (p + 1);
+-                }
+-        }
+-
+-        xkl_config_rec_activate (config, engine);
+-
+-        g_object_unref (config);
+-#endif
+-}
+-
+diff --git a/gui/simple-greeter/gdm-layouts.h b/gui/simple-greeter/gdm-layouts.h
+deleted file mode 100644
+index 9e1b99b..0000000
+--- a/gui/simple-greeter/gdm-layouts.h
++++ /dev/null
+@@ -1,35 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright 2008 Red Hat, Inc.
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+- *
+- * Written by: Matthias Clasen
+- */
+-
+-#ifndef __GDM_LAYOUTS_H
+-#define __GDM_LAYOUTS_H
+-
+-G_BEGIN_DECLS
+-
+-char *        gdm_get_layout_from_name   (const char *name);
+-char **       gdm_get_all_layout_names   (void);
+-gboolean      gdm_layout_is_valid        (const char *layout);
+-const char *  gdm_layout_get_default_layout (void);
+-void          gdm_layout_activate        (const char *layout);
+-
+-G_END_DECLS
+-
+-#endif /* __GDM_LAYOUT_CHOOSER_WIDGET_H */
+diff --git a/gui/simple-greeter/test-layout-chooser.c b/gui/simple-greeter/test-layout-chooser.c
+deleted file mode 100644
+index a30af36..0000000
+--- a/gui/simple-greeter/test-layout-chooser.c
++++ /dev/null
+@@ -1,61 +0,0 @@
+-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+- *
+- * Copyright (C) 2007 William Jon McCann <mccann@jhu.edu>
+- *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License as published by
+- * the Free Software Foundation; either version 2 of the License, or
+- * (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+- */
+-
+-#include "config.h"
+-
+-#include <stdlib.h>
+-#include <libintl.h>
+-#include <locale.h>
+-#include <string.h>
+-#include <unistd.h>
+-#include <signal.h>
+-#include <errno.h>
+-
+-#include <glib/gi18n.h>
+-#include <gtk/gtk.h>
+-
+-#include "gdm-layout-chooser-dialog.h"
+-
+-int
+-main (int argc, char *argv[])
+-{
+-        GtkWidget *dialog;
+-
+-        bindtextdomain (GETTEXT_PACKAGE, GNOMELOCALEDIR);
+-        bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+-        textdomain (GETTEXT_PACKAGE);
+-
+-        setlocale (LC_ALL, "");
+-
+-        gtk_init (&argc, &argv);
+-
+-        dialog = gdm_layout_chooser_dialog_new ();
+-        gtk_widget_set_size_request (dialog, 480, 480);
+-
+-        if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_OK) {
+-                char *name;
+-
+-                name = gdm_layout_chooser_dialog_get_current_layout_name (GDM_LAYOUT_CHOOSER_DIALOG (dialog));
+-                g_message ("Layout: %s", name ? name : "(null)");
+-                g_free (name);
+-        }
+-        gtk_widget_destroy (dialog);
+-
+-        return 0;
+-}
+diff --git a/po/POTFILES.in b/po/POTFILES.in
+index ed922a5..45371e0 100644
+--- a/po/POTFILES.in
++++ b/po/POTFILES.in
+@@ -72,9 +72,6 @@ gui/simple-greeter/gdm-language-chooser-dialog.c
+ gui/simple-greeter/gdm-language-chooser-widget.c
+ gui/simple-greeter/gdm-language-option-widget.c
+ gui/simple-greeter/gdm-languages.c
+-gui/simple-greeter/gdm-layout-chooser-dialog.c
+-gui/simple-greeter/gdm-layout-chooser-widget.c
+-gui/simple-greeter/gdm-layout-option-widget.c
+ gui/simple-greeter/gdm-option-widget.c
+ gui/simple-greeter/gdm-recent-option-widget.c
+ gui/simple-greeter/gdm-remote-login-window.c
+-- 
+1.7.1
+
+
+From 69e2a2d60272f189bd300a07c2dccf19154fe460 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 5 Aug 2011 12:28:03 -0400
+Subject: [PATCH 2/2] greeter: add a gnomekbd indicator to panel
+
+This lets users switch between keyboard layouts configured
+for the system.
+---
+ configure.ac                           |   13 ++++
+ gui/simple-greeter/Makefile.am         |    5 ++
+ gui/simple-greeter/gdm-greeter-panel.c |  112 ++++++++++++++++++++++++++++++++
+ 3 files changed, 130 insertions(+), 0 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 3d833d1..73dc48a 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -63,6 +63,7 @@ SCROLLKEEPER_REQUIRED_VERSION=0.1.4
+ GCONF_REQUIRED_VERSION=2.6.1
+ GNOME_PANEL_REQUIRED_VERSION=2.0.0
+ LIBXKLAVIER_REQUIRED_VERSION=4.0
++LIBGNOMEKBDUI_REQUIRED_VERSION=0.1
+ LIBCANBERRA_GTK_REQUIRED_VERSION=0.4
+ #FONTCONFIG_REQUIRED_VERSION=2.6.0
+ FONTCONFIG_REQUIRED_VERSION=2.5.0
+@@ -161,6 +162,18 @@ AC_SUBST(HAVE_LIBXKLAVIER)
+ AC_SUBST(LIBXKLAVIER_CFLAGS)
+ AC_SUBST(LIBXKLAVIER_LIBS)
+ 
++PKG_CHECK_MODULES(LIBGNOMEKBDUI,
++        libgnomekbdui >= $LIBGNOMEKBDUI_REQUIRED_VERSION,
++        have_libgnomekbdui=yes,
++        have_libgnomekbdui=no)
++if test "x$have_libgnomekbdui" = "xyes" ; then
++  AC_DEFINE(HAVE_LIBGNOMEKBDUI, [], [Define if we have libgnomekbdui])
++fi
++AM_CONDITIONAL(HAVE_LIBGNOMEKBD, test x$have_libgnomekbd = xyes)
++AC_SUBST(HAVE_LIBGNOMEKBD)
++AC_SUBST(LIBGNOMEKBD_CFLAGS)
++AC_SUBST(LIBGNOMEKBD_LIBS)
++
+ PKG_CHECK_MODULES(SIMPLE_CHOOSER,
+         dbus-glib-1 >= $DBUS_GLIB_REQUIRED_VERSION
+         gtk+-2.0 >= $GTK_REQUIRED_VERSION
+diff --git a/gui/simple-greeter/Makefile.am b/gui/simple-greeter/Makefile.am
+index d82b6c2..730d710 100644
+--- a/gui/simple-greeter/Makefile.am
++++ b/gui/simple-greeter/Makefile.am
+@@ -27,6 +27,8 @@ AM_CPPFLAGS = \
+ 	$(DISABLE_DEPRECATED_CFLAGS)			\
+ 	$(GTK_CFLAGS)					\
+ 	$(SIMPLE_GREETER_CFLAGS)			\
++	$(LIBGNOMEKBDUI_CFLAGS)		\
++	$(LIBXKLAVIER_CFLAGS)             \
+ 	$(NULL)
+ 
+ @INTLTOOL_SCHEMAS_RULE@
+@@ -103,6 +105,7 @@ test_greeter_login_window_LDADD =	\
+ 	$(COMMON_LIBS)			\
+ 	$(SIMPLE_GREETER_LIBS)		\
+ 	$(RBAC_LIBS)			\
++	$(LIBXKLAVIER_LIBS)		\
+ 	$(NULL)
+ 
+ test_greeter_panel_SOURCES = 	\
+@@ -145,6 +148,7 @@ test_greeter_panel_LDADD =	\
+ 	$(SIMPLE_GREETER_LIBS)		\
+ 	$(GTK_LIBS)			\
+ 	$(GCONF_LIBS)			\
++	$(LIBGNOMEKBDUI_LIBS)		\
+ 	$(DEVKIT_POWER_LIBS)		\
+ 	$(NULL)
+ 
+@@ -307,6 +311,7 @@ gdm_simple_greeter_LDADD = 		\
+ 	$(EXTRA_GREETER_LIBS)   	\
+ 	$(SIMPLE_GREETER_LIBS)		\
+ 	$(RBAC_LIBS)			\
++	$(LIBGNOMEKBDUI_LIBS)		\
+ 	$(DEVKIT_POWER_LIBS)		\
+ 	$(NULL)
+ 
+diff --git a/gui/simple-greeter/gdm-greeter-panel.c b/gui/simple-greeter/gdm-greeter-panel.c
+index c3d3372..06563dc 100644
+--- a/gui/simple-greeter/gdm-greeter-panel.c
++++ b/gui/simple-greeter/gdm-greeter-panel.c
+@@ -44,6 +44,9 @@
+ #include <devkit-power-gobject/devicekit-power.h>
+ #endif
+ 
++#include <libgnomekbd/gkbd-indicator.h>
++#include <libxklavier/xkl_engine.h>
++
+ #include "gdm-languages.h"
+ #include "gdm-greeter-panel.h"
+ #include "gdm-clock-widget.h"
+@@ -79,6 +82,7 @@ struct GdmGreeterPanelPrivate
+         GtkWidget              *shutdown_button;
+         GtkWidget              *shutdown_menu;
+         GtkWidget              *language_option_widget;
++        GtkWidget              *keyboard_indicator_widget;
+         GtkWidget              *session_option_widget;
+ 
+         GdmTimer               *animation_timer;
+@@ -697,12 +701,99 @@ on_shutdown_menu_deactivate (GdmGreeterPanel *panel)
+ }
+ 
+ static void
++show_or_hide_keyboard_indicator (GdmGreeterPanel *panel)
++{
++        XklEngine *engine;
++        guint num_groups;
++
++        engine = gkbd_indicator_get_xkl_engine ();
++
++        num_groups = xkl_engine_get_num_groups (engine);
++        if (num_groups > 1) {
++                gtk_widget_show (panel->priv->keyboard_indicator_widget);
++        } else {
++                gtk_widget_hide (panel->priv->keyboard_indicator_widget);
++        }
++}
++
++static void
++on_num_groups_changed (XklEngine       *engine,
++                       GParamSpec      *pspec,
++                       GdmGreeterPanel *panel)
++{
++    show_or_hide_keyboard_indicator (panel);
++}
++
++static void
++on_x_config_changed (XklEngine       *engine,
++                     GdmGreeterPanel *panel)
++{
++    show_or_hide_keyboard_indicator (panel);
++}
++
++static void
++on_x_state_changed (XklEngine            *engine,
++                    XklEngineStateChange  type,
++                    int                   num,
++                    gboolean              predicate,
++                    GdmGreeterPanel      *panel)
++{
++    show_or_hide_keyboard_indicator (panel);
++}
++
++static void
++activate_keyboard_layout (GdmGreeterPanel *panel)
++{
++        XklEngine    *engine;
++        XklConfigRec *config;
++
++        engine = gkbd_indicator_get_xkl_engine ();
++        config = xkl_config_rec_new ();
++
++        if (xkl_config_rec_get_from_server (config, engine)) {
++                int i;
++
++                for (i = 1; config->layouts[i] != NULL; i++) {
++                        /* put us at the front of the list, since usernames and
++                         * passwords are usually ascii
++                         */
++                        if (strcmp (config->layouts[i], "us") == 0) {
++                                char *temp_layout;
++                                char *temp_variant = NULL;
++                                char *temp_options = NULL;
++
++                                temp_layout = config->layouts[0];
++                                config->layouts[0] = config->layouts[i];
++                                config->layouts[i] = temp_layout;
++
++                                if (config->variants != NULL) {
++                                        temp_variant = config->variants[0];
++                                        config->variants[0] = config->variants[i];
++                                        config->variants[i] = temp_variant;
++                                }
++
++                                if (config->options != NULL) {
++                                        temp_options = config->options[0];
++                                        config->options[0] = config->options[i];
++                                        config->options[i] = temp_options;
++                                }
++                                break;
++                        }
++                }
++                xkl_config_rec_activate (config, engine);
++        }
++
++}
++
++static void
+ setup_panel (GdmGreeterPanel *panel)
+ {
+         NaTray    *tray;
+         GtkWidget *spacer;
+         int        padding;
+ 
++        XklEngine    *engine;
++
+         gdm_profile_start (NULL);
+ 
+         GTK_WIDGET_SET_FLAGS (GTK_WIDGET (panel), GTK_CAN_FOCUS);
+@@ -817,6 +908,27 @@ setup_panel (GdmGreeterPanel *panel)
+                             GTK_WIDGET (panel->priv->clock), FALSE, FALSE, 6);
+         gtk_widget_show (panel->priv->clock);
+ 
++        panel->priv->keyboard_indicator_widget = gkbd_indicator_new ();
++
++        gtk_box_pack_end (GTK_BOX (panel->priv->hbox),
++                          GTK_WIDGET (panel->priv->keyboard_indicator_widget), FALSE, FALSE, 6);
++
++        activate_keyboard_layout (panel);
++        show_or_hide_keyboard_indicator (panel);
++
++        engine = gkbd_indicator_get_xkl_engine ();
++        g_signal_connect (engine, "notify::num-groups",
++                          G_CALLBACK (on_num_groups_changed),
++                          panel);
++
++        g_signal_connect (engine, "X-config-changed",
++                          G_CALLBACK (on_x_config_changed),
++                          panel);
++
++        g_signal_connect (engine, "X-state-changed",
++                          G_CALLBACK (on_x_state_changed),
++                          panel);
++
+         tray = na_tray_new_for_screen (gtk_window_get_screen (GTK_WINDOW (panel)),
+                                        GTK_ORIENTATION_HORIZONTAL);
+ 
+-- 
+1.7.1
+

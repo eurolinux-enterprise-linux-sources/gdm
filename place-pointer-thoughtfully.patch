@@ -1,0 +1,166 @@
+From fe257f3a0820ca55bb16f9c7f9ee3152de0a51ef Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Mon, 8 Aug 2011 17:24:43 -0400
+Subject: [PATCH] daemon: warp pointer to convenient place at startup
+
+This makes sure we always start the greeter window in a consistent
+place, and it makes sure the pointer doesn't start up on top of
+the greeter window.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=644327
+(cherry picked from commit 90ab791544d676629800e80fcf7a28a628f94e94)
+---
+ configure.ac              |    4 +-
+ daemon/gdm-simple-slave.c |    3 ++
+ daemon/gdm-slave.c        |   80 +++++++++++++++++++++++++++++++++++++++++++++
+ daemon/gdm-slave.h        |    3 ++
+ 4 files changed, 88 insertions(+), 2 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index f430508..282217c 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -75,12 +75,12 @@ PKG_CHECK_MODULES(DAEMON,
+ AC_SUBST(DAEMON_CFLAGS)
+ AC_SUBST(DAEMON_LIBS)
+ 
+-PKG_CHECK_MODULES(XLIB, x11 xau, ,
++PKG_CHECK_MODULES(XLIB, x11 xau xrandr, ,
+   [AC_PATH_XTRA
+     if test "x$no_x" = xyes; then
+       AC_MSG_ERROR("no (requires X development libraries)")
+     else
+-      XLIB_LIBS="$X_PRE_LIBS $X_LIBS -lXau -lX11 -lXext $X_EXTRA_LIBS"
++      XLIB_LIBS="$X_PRE_LIBS $X_LIBS -lXau -lX11 -lXext -lXrandr $X_EXTRA_LIBS"
+       XLIB_CFLAGS=$X_CFLAGS
+     fi])
+ AC_SUBST(XLIB_CFLAGS)
+diff --git a/daemon/gdm-simple-slave.c b/daemon/gdm-simple-slave.c
+index bcbc9b0..c0a978f 100644
+--- a/daemon/gdm-simple-slave.c
++++ b/daemon/gdm-simple-slave.c
+@@ -972,6 +972,9 @@ plymouth_quit_without_transition (GdmSimpleSlave *slave)
+ static void
+ setup_server (GdmSimpleSlave *slave)
+ {
++        /* Put cursor out of the way on first head */
++        gdm_slave_set_initial_cursor_position (GDM_SLAVE (slave));
++
+         /* Set the busy cursor */
+         gdm_slave_set_busy_cursor (GDM_SLAVE (slave));
+ 
+diff --git a/daemon/gdm-slave.c b/daemon/gdm-slave.c
+index b7d4165..d597fb3 100644
+--- a/daemon/gdm-slave.c
++++ b/daemon/gdm-slave.c
+@@ -45,6 +45,7 @@
+ #include <X11/Xlib.h> /* for Display */
+ #include <X11/Xatom.h> /* for XA_PIXMAP */
+ #include <X11/cursorfont.h> /* for watch cursor */
++#include <X11/extensions/Xrandr.h>
+ #include <X11/Xatom.h>
+ 
+ #include "gdm-common.h"
+@@ -428,6 +429,85 @@ gdm_slave_save_root_windows (GdmSlave *slave)
+         XSync (slave->priv->server_display, False);
+ }
+ 
++static void
++determine_initial_cursor_position (GdmSlave *slave,
++                                   int      *x,
++                                   int      *y)
++{
++        XRRScreenResources *resources;
++        RROutput primary_output;
++        int i;
++
++        /* If this function fails for whatever reason,
++         * put the pointer in the upper left corner of the
++         * first monitor
++         */
++        *x = 100;
++        *y = 75;
++
++        gdm_error_trap_push ();
++        resources = XRRGetScreenResources (slave->priv->server_display,
++                                           DefaultRootWindow (slave->priv->server_display));
++        primary_output = XRRGetOutputPrimary (slave->priv->server_display,
++                                              DefaultRootWindow (slave->priv->server_display));
++        gdm_error_trap_pop ();
++
++        if (resources == NULL) {
++                return;
++        }
++
++        for (i = 0; i < resources->noutput; i++) {
++                XRROutputInfo *output_info;
++
++                if (primary_output == None) {
++                        primary_output = resources->outputs[0];
++                }
++
++                if (resources->outputs[i] != primary_output) {
++                        continue;
++                }
++
++                output_info = XRRGetOutputInfo (slave->priv->server_display,
++                                                resources,
++                                                resources->outputs[i]);
++
++                if (output_info->connection != RR_Disconnected &&
++                    output_info->crtc != 0) {
++                        XRRCrtcInfo *crtc_info;
++
++                        crtc_info = XRRGetCrtcInfo (slave->priv->server_display,
++                                                    resources,
++                                                    output_info->crtc);
++                        /* position it sort of in the lower right
++                         */
++                        *x = crtc_info->x + 100;
++                        *y = crtc_info->y + 75;
++                        XRRFreeCrtcInfo (crtc_info);
++                }
++
++                XRRFreeOutputInfo (output_info);
++                break;
++        }
++
++        XRRFreeScreenResources (resources);
++}
++
++void
++gdm_slave_set_initial_cursor_position (GdmSlave *slave)
++{
++        if (slave->priv->server_display != NULL) {
++                int x, y;
++
++                determine_initial_cursor_position (slave, &x, &y);
++                XWarpPointer(slave->priv->server_display,
++                             None,
++                             DefaultRootWindow (slave->priv->server_display),
++                             0, 0,
++                             0, 0,
++                             x, y);
++        }
++}
++
+ void
+ gdm_slave_set_busy_cursor (GdmSlave *slave)
+ {
+diff --git a/daemon/gdm-slave.h b/daemon/gdm-slave.h
+index 1652457..5c1cb9a 100644
+--- a/daemon/gdm-slave.h
++++ b/daemon/gdm-slave.h
+@@ -73,6 +73,9 @@ gboolean            gdm_slave_switch_to_user_session (GdmSlave   *slave,
+                                                       const char *username);
+ 
+ gboolean            gdm_slave_connect_to_x11_display (GdmSlave   *slave);
++
++void                gdm_slave_set_initial_cursor_position (GdmSlave *slave);
++
+ void                gdm_slave_set_busy_cursor        (GdmSlave   *slave);
+ void                gdm_slave_save_root_windows      (GdmSlave   *slave);
+ gboolean            gdm_slave_run_script             (GdmSlave   *slave,
+-- 
+1.7.1
+

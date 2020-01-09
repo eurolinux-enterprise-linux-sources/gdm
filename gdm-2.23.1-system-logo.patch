@@ -1,0 +1,25 @@
+From de8cba0c8cc74e44a8b876acffc3c216acb48cbe Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Wed, 27 Jul 2011 14:51:18 -0400
+Subject: [PATCH] Show logo in login screen instead of computer
+
+---
+ gui/simple-greeter/gdm-simple-greeter.schemas.in |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/gui/simple-greeter/gdm-simple-greeter.schemas.in b/gui/simple-greeter/gdm-simple-greeter.schemas.in
+index b69335d..db89234 100644
+--- a/gui/simple-greeter/gdm-simple-greeter.schemas.in
++++ b/gui/simple-greeter/gdm-simple-greeter.schemas.in
+@@ -38,7 +38,7 @@
+       <applyto>/apps/gdm/simple-greeter/logo_icon_name</applyto>
+       <owner>gdm-simple-greeter</owner>
+       <type>string</type>
+-      <default>computer</default>
++      <default>start-here</default>
+       <locale name="C">
+         <short>Icon name to use for greeter logo</short>
+         <long>Set to the themed icon name to use for the greeter logo.</long>
+-- 
+1.7.1
+
