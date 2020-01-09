@@ -1,0 +1,91 @@
+From a76577d1e31666267cfe15b0fa7af4991c88e8b5 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Sun, 22 Jun 2014 15:31:04 -0400
+Subject: [PATCH] login-window: only focus window if there's a valid user
+ timestamp
+
+set_focus() is called any time the login window is reset, including at
+startup.  set_focus() re-presents the window in the case it lost focus.
+At startup it won't have lost focus, and gdk_window_focus will cause
+window manager spew because the user time is 0 (since we don't start
+the greeter using start up notification, and the user hasn't had a
+chance to interact with the display yet).
+
+This commit explicitly checks for user time of 0 and avoids presenting
+the window in that case.
+---
+ gui/simple-greeter/gdm-greeter-login-window.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/gui/simple-greeter/gdm-greeter-login-window.c b/gui/simple-greeter/gdm-greeter-login-window.c
+index 2e37587..a11e024 100644
+--- a/gui/simple-greeter/gdm-greeter-login-window.c
++++ b/gui/simple-greeter/gdm-greeter-login-window.c
+@@ -190,61 +190,63 @@ static void
+ set_busy (GdmGreeterLoginWindow *login_window)
+ {
+         GdkCursor *cursor;
+ 
+         cursor = gdk_cursor_new (GDK_WATCH);
+         gdk_window_set_cursor (GTK_WIDGET (login_window)->window, cursor);
+         gdk_cursor_unref (cursor);
+ }
+ 
+ static void
+ set_ready (GdmGreeterLoginWindow *login_window)
+ {
+         gdk_window_set_cursor (GTK_WIDGET (login_window)->window, NULL);
+ }
+ 
+ static void
+ set_sensitive (GdmGreeterLoginWindow *login_window,
+                gboolean               sensitive)
+ {
+         GtkWidget *box;
+ 
+         box = GTK_WIDGET (gtk_builder_get_object (login_window->priv->builder, "buttonbox"));
+         gtk_widget_set_sensitive (box, sensitive);
+ 
+         gtk_widget_set_sensitive (login_window->priv->user_chooser, sensitive);
+ }
+ 
+ static void
+ set_focus (GdmGreeterLoginWindow *login_window)
+ {
+-        gdk_window_focus (GTK_WIDGET (login_window)->window, GDK_CURRENT_TIME);
++        if (gdk_x11_display_get_user_time (gtk_widget_get_display (GTK_WIDGET (login_window))) != 0) {
++                gtk_window_present (GTK_WINDOW (login_window));
++        }
+ 
+         if (login_window->priv->active_task != NULL &&
+             gdm_conversation_focus (GDM_CONVERSATION (login_window->priv->active_task))) {
+                 char *name;
+                 name = gdm_task_get_name (login_window->priv->active_task);
+                 g_debug ("GdmGreeterLoginWindow: focusing task %s", name);
+                 g_free (name);
+         } else if (GTK_WIDGET_REALIZED (login_window->priv->user_chooser) && ! GTK_WIDGET_HAS_FOCUS (login_window->priv->user_chooser)) {
+                 gtk_widget_grab_focus (login_window->priv->user_chooser);
+         }
+ 
+ }
+ 
+ static void
+ queue_message_for_conversation (GdmConversation *conversation,
+                                 const char      *message)
+ {
+         gdm_conversation_queue_message (conversation,
+                                         message,
+                                         GDM_SERVICE_MESSAGE_TYPE_INFO);
+ }
+ 
+ static void
+ set_message (GdmGreeterLoginWindow *login_window,
+              const char            *text)
+ {
+         g_return_if_fail (GDM_IS_GREETER_LOGIN_WINDOW (login_window));
+ 
+         g_list_foreach (login_window->priv->tasks,
+                         (GFunc) queue_message_for_conversation,
+-- 
+1.9.3
+

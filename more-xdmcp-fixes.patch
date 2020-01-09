@@ -1,0 +1,907 @@
+From 2006d4a09a0a9714a3f263b93b4fe0dc71fbfdae Mon Sep 17 00:00:00 2001
+From: Vincent Untz <vuntz@gnome.org>
+Date: Thu, 3 Feb 2011 15:52:49 -0500
+Subject: [PATCH 1/2] greeter: inform daemon when user disconnects
+
+This is so the daemon knows the user is intentionally
+disconnecting and it's not just the greeter tanking.
+---
+ gui/simple-greeter/gdm-greeter-login-window.c | 11 -----------
+ gui/simple-greeter/gdm-greeter-login-window.h |  1 -
+ gui/simple-greeter/gdm-greeter-panel.c        | 19 ++++++++++++++++---
+ gui/simple-greeter/gdm-greeter-panel.h        |  1 +
+ gui/simple-greeter/gdm-greeter-session.c      | 11 +++++------
+ 5 files changed, 22 insertions(+), 21 deletions(-)
+
+diff --git a/gui/simple-greeter/gdm-greeter-login-window.c b/gui/simple-greeter/gdm-greeter-login-window.c
+index efff3e3..a8e783f 100644
+--- a/gui/simple-greeter/gdm-greeter-login-window.c
++++ b/gui/simple-greeter/gdm-greeter-login-window.c
+@@ -131,61 +131,60 @@ struct GdmGreeterLoginWindowPrivate
+         gboolean         user_list_disabled;
+         guint            num_queries;
+ 
+         gboolean         timed_login_already_enabled;
+         gboolean         timed_login_enabled;
+         guint            timed_login_delay;
+         char            *timed_login_username;
+         guint            timed_login_timeout_id;
+ 
+         guint            login_button_handler_id;
+         guint            start_session_handler_id;
+ 
+         char            *service_name_of_session_ready_to_start;
+ 
+ };
+ 
+ enum {
+         PROP_0,
+         PROP_DISPLAY_IS_LOCAL,
+         PROP_IS_INTERACTIVE,
+ };
+ 
+ enum {
+         START_CONVERSATION,
+         BEGIN_AUTO_LOGIN,
+         BEGIN_VERIFICATION,
+         BEGIN_VERIFICATION_FOR_USER,
+         QUERY_ANSWER,
+         START_SESSION,
+         USER_SELECTED,
+-        DISCONNECTED,
+         CANCELLED,
+         LAST_SIGNAL
+ };
+ 
+ static guint signals [LAST_SIGNAL] = { 0, };
+ 
+ static void     gdm_greeter_login_window_class_init   (GdmGreeterLoginWindowClass *klass);
+ static void     gdm_greeter_login_window_init         (GdmGreeterLoginWindow      *greeter_login_window);
+ static void     gdm_greeter_login_window_finalize     (GObject                    *object);
+ 
+ static void     restart_timed_login_timeout (GdmGreeterLoginWindow *login_window);
+ static void     on_user_unchosen            (GdmUserChooserWidget *user_chooser,
+                                              GdmGreeterLoginWindow *login_window);
+ 
+ static void     switch_mode                 (GdmGreeterLoginWindow *login_window,
+                                              int                    number);
+ static void     update_banner_message       (GdmGreeterLoginWindow *login_window);
+ static void     gdm_greeter_login_window_start_session_when_ready (GdmGreeterLoginWindow *login_window,
+                                                                    const char            *service_name);
+ static void handle_stopped_conversation (GdmGreeterLoginWindow *login_window,
+                                          const char            *service_name);
+ 
+ static void begin_single_service_verification (GdmGreeterLoginWindow *login_window,
+                                                const char            *service_name);
+ 
+ G_DEFINE_TYPE (GdmGreeterLoginWindow, gdm_greeter_login_window, GTK_TYPE_WINDOW)
+ 
+ static void
+ set_busy (GdmGreeterLoginWindow *login_window)
+ {
+@@ -2087,70 +2086,60 @@ gdm_greeter_login_window_class_init (GdmGreeterLoginWindowClass *klass)
+         signals [QUERY_ANSWER] =
+                 g_signal_new ("query-answer",
+                               G_TYPE_FROM_CLASS (object_class),
+                               G_SIGNAL_RUN_LAST,
+                               G_STRUCT_OFFSET (GdmGreeterLoginWindowClass, query_answer),
+                               NULL,
+                               NULL,
+                               gdm_marshal_VOID__STRING_STRING,
+                               G_TYPE_NONE,
+                               2, G_TYPE_STRING, G_TYPE_STRING);
+         signals [USER_SELECTED] =
+                 g_signal_new ("user-selected",
+                               G_TYPE_FROM_CLASS (object_class),
+                               G_SIGNAL_RUN_LAST,
+                               G_STRUCT_OFFSET (GdmGreeterLoginWindowClass, user_selected),
+                               NULL,
+                               NULL,
+                               g_cclosure_marshal_VOID__STRING,
+                               G_TYPE_NONE,
+                               1, G_TYPE_STRING);
+         signals [CANCELLED] =
+                 g_signal_new ("cancelled",
+                               G_TYPE_FROM_CLASS (object_class),
+                               G_SIGNAL_RUN_LAST,
+                               G_STRUCT_OFFSET (GdmGreeterLoginWindowClass, cancelled),
+                               NULL,
+                               NULL,
+                               g_cclosure_marshal_VOID__VOID,
+                               G_TYPE_NONE,
+                               0);
+-        signals [DISCONNECTED] =
+-                g_signal_new ("disconnected",
+-                              G_TYPE_FROM_CLASS (object_class),
+-                              G_SIGNAL_RUN_LAST,
+-                              G_STRUCT_OFFSET (GdmGreeterLoginWindowClass, disconnected),
+-                              NULL,
+-                              NULL,
+-                              g_cclosure_marshal_VOID__VOID,
+-                              G_TYPE_NONE,
+-                              0);
+         signals [START_SESSION] =
+                 g_signal_new ("start-session",
+                               G_TYPE_FROM_CLASS (object_class),
+                               G_SIGNAL_RUN_LAST,
+                               G_STRUCT_OFFSET (GdmGreeterLoginWindowClass, start_session),
+                               NULL,
+                               NULL,
+                               g_cclosure_marshal_VOID__STRING,
+                               G_TYPE_NONE,
+                               1, G_TYPE_STRING);
+ 
+         g_object_class_install_property (object_class,
+                                          PROP_DISPLAY_IS_LOCAL,
+                                          g_param_spec_boolean ("display-is-local",
+                                                                "display is local",
+                                                                "display is local",
+                                                                FALSE,
+                                                                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+         g_object_class_install_property (object_class,
+                                          PROP_IS_INTERACTIVE,
+                                          g_param_spec_boolean ("is-interactive",
+                                                                "Is Interactive",
+                                                                "Use has had an oppurtunity to interact with window",
+                                                                FALSE,
+                                                                G_PARAM_READABLE));
+ 
+         g_type_class_add_private (klass, sizeof (GdmGreeterLoginWindowPrivate));
+ }
+ 
+ static void
+diff --git a/gui/simple-greeter/gdm-greeter-login-window.h b/gui/simple-greeter/gdm-greeter-login-window.h
+index 041cbc4..7437e72 100644
+--- a/gui/simple-greeter/gdm-greeter-login-window.h
++++ b/gui/simple-greeter/gdm-greeter-login-window.h
+@@ -39,61 +39,60 @@ G_BEGIN_DECLS
+ #define GDM_IS_GREETER_LOGIN_WINDOW_EXTENSION(e) (GDM_IS_CONVERSATION(e) && GDM_IS_TASK(e))
+ 
+ typedef struct GdmGreeterLoginWindowPrivate GdmGreeterLoginWindowPrivate;
+ 
+ typedef struct
+ {
+         GtkWindow                     parent;
+         GdmGreeterLoginWindowPrivate *priv;
+ } GdmGreeterLoginWindow;
+ 
+ typedef struct
+ {
+         GtkWindowClass   parent_class;
+ 
+         /* signals */
+         void (* start_conversation)          (GdmGreeterLoginWindow *login_window,
+                                               const char            *service_name);
+         void (* begin_auto_login)            (GdmGreeterLoginWindow *login_window,
+                                               const char            *username);
+         void (* begin_verification)          (GdmGreeterLoginWindow *login_window,
+                                               const char            *service_name);
+         void (* begin_verification_for_user) (GdmGreeterLoginWindow *login_window,
+                                               const char            *service_name,
+                                               const char            *username);
+         void (* query_answer)                (GdmGreeterLoginWindow *login_window,
+                                               const char            *service_name,
+                                               const char            *text);
+         void (* user_selected)               (GdmGreeterLoginWindow *login_window,
+                                               const char            *text);
+         void (* cancelled)                   (GdmGreeterLoginWindow *login_window);
+-        void (* disconnected)                (GdmGreeterLoginWindow *login_window);
+         void (* start_session)               (GdmGreeterLoginWindow *login_window,
+                                               const char            *sevice_name);
+ 
+ } GdmGreeterLoginWindowClass;
+ 
+ GType               gdm_greeter_login_window_get_type           (void);
+ GtkWidget *         gdm_greeter_login_window_new                (gboolean display_is_local);
+ 
+ 
+ gboolean            gdm_greeter_login_window_reset              (GdmGreeterLoginWindow *login_window);
+ gboolean            gdm_greeter_login_window_ready              (GdmGreeterLoginWindow *login_window,
+                                                                  const char            *service_name);
+ gboolean            gdm_greeter_login_window_conversation_stopped (GdmGreeterLoginWindow *login_window,
+                                                                    const char            *service_name);
+ gboolean            gdm_greeter_login_window_info_query         (GdmGreeterLoginWindow *login_window,
+                                                                  const char *service_name,
+                                                                  const char *text);
+ gboolean            gdm_greeter_login_window_secret_info_query  (GdmGreeterLoginWindow *login_window,
+                                                                  const char *service_name,
+                                                                  const char *text);
+ gboolean            gdm_greeter_login_window_info               (GdmGreeterLoginWindow *login_window,
+                                                                  const char *service_name,
+                                                                  const char *text);
+ gboolean            gdm_greeter_login_window_problem            (GdmGreeterLoginWindow *login_window,
+                                                                  const char *service_name,
+                                                                  const char *text);
+ 
+ gboolean            gdm_greeter_login_window_service_unavailable (GdmGreeterLoginWindow *login_window,
+                                                                   const char *service_name);
+ 
+diff --git a/gui/simple-greeter/gdm-greeter-panel.c b/gui/simple-greeter/gdm-greeter-panel.c
+index 5cb2ef2..49aefe8 100644
+--- a/gui/simple-greeter/gdm-greeter-panel.c
++++ b/gui/simple-greeter/gdm-greeter-panel.c
+@@ -78,60 +78,61 @@ struct GdmGreeterPanelPrivate
+         GtkWidget              *alignment;
+         GtkWidget              *option_hbox;
+         GtkWidget              *hostname_label;
+         GtkWidget              *clock;
+         GtkWidget              *shutdown_button;
+         GtkWidget              *shutdown_menu;
+         GtkWidget              *language_option_widget;
+         GtkWidget              *keyboard_indicator_widget;
+         GtkWidget              *session_option_widget;
+ 
+         GdmTimer               *animation_timer;
+         double                  progress;
+ 
+         char                   *default_session_name;
+         char                   *default_language_name;
+ 
+         GConfClient            *client;
+         guint                   display_is_local : 1;
+ };
+ 
+ enum {
+         PROP_0,
+         PROP_MONITOR,
+         PROP_DISPLAY_IS_LOCAL
+ };
+ 
+ enum {
+         LANGUAGE_SELECTED,
+         LAYOUT_SELECTED,
+         SESSION_SELECTED,
++        DISCONNECTED,
+         NUMBER_OF_SIGNALS
+ };
+ 
+ static guint signals [NUMBER_OF_SIGNALS] = { 0, };
+ 
+ static void     gdm_greeter_panel_class_init  (GdmGreeterPanelClass *klass);
+ static void     gdm_greeter_panel_init        (GdmGreeterPanel      *greeter_panel);
+ static void     gdm_greeter_panel_finalize    (GObject              *object);
+ 
+ G_DEFINE_TYPE (GdmGreeterPanel, gdm_greeter_panel, GTK_TYPE_WINDOW)
+ 
+ static void
+ gdm_greeter_panel_set_monitor (GdmGreeterPanel *panel,
+                                int              monitor)
+ {
+         g_return_if_fail (GDM_IS_GREETER_PANEL (panel));
+ 
+         if (panel->priv->monitor == monitor) {
+                 return;
+         }
+ 
+         panel->priv->monitor = monitor;
+ 
+         gtk_widget_queue_resize (GTK_WIDGET (panel));
+ 
+         g_object_notify (G_OBJECT (panel), "monitor");
+ }
+ 
+ static void
+ _gdm_greeter_panel_set_display_is_local (GdmGreeterPanel *panel,
+@@ -588,63 +589,64 @@ do_system_restart (void)
+                          error->message);
+                 g_error_free (error);
+         }
+ }
+ 
+ static void
+ do_system_stop (void)
+ {
+         gboolean         res;
+         GError          *error;
+         DBusGConnection *connection;
+ 
+         error = NULL;
+         connection = dbus_g_bus_get (DBUS_BUS_SYSTEM, &error);
+         if (connection == NULL) {
+                 g_warning ("Unable to get system bus connection: %s", error->message);
+                 g_error_free (error);
+                 return;
+         }
+ 
+         res = try_system_stop (connection, &error);
+         if (!res) {
+                 g_debug ("GdmGreeterPanel: unable to stop system: %s: %s",
+                          dbus_g_error_get_name (error),
+                          error->message);
+                 g_error_free (error);
+         }
+ }
+ 
+ static void
+-do_disconnect (void)
++do_disconnect (GtkWidget       *widget,
++               GdmGreeterPanel *panel)
+ {
+-        gtk_main_quit ();
++        g_signal_emit (panel, signals[DISCONNECTED], 0);
+ }
+ 
+ static gboolean
+ get_show_restart_buttons (GdmGreeterPanel *panel)
+ {
+         gboolean     show;
+         GError      *error;
+ 
+         error = NULL;
+         show = ! gconf_client_get_bool (panel->priv->client, KEY_DISABLE_RESTART_BUTTONS, &error);
+         if (error != NULL) {
+                 g_debug ("GdmGreeterPanel: unable to get disable-restart-buttons configuration: %s", error->message);
+                 g_error_free (error);
+         }
+ 
+ #ifdef ENABLE_RBAC_SHUTDOWN
+         {
+                 char *username;
+ 
+                 username = g_get_user_name ();
+                 if (username == NULL || !chkauthattr (RBAC_SHUTDOWN_KEY, username)) {
+                         show = FALSE;
+                         g_debug ("GdmGreeterPanel: Not showing stop/restart buttons for user %s due to RBAC key %s",
+                                  username, RBAC_SHUTDOWN_KEY);
+                 } else {
+                         g_debug ("GdmGreeterPanel: Showing stop/restart buttons for user %s due to RBAC key %s",
+                                  username, RBAC_SHUTDOWN_KEY);
+                 }
+         }
+ #endif
+@@ -853,61 +855,61 @@ setup_panel (GdmGreeterPanel *panel)
+                 panel->priv->hostname_label = gtk_label_new (g_get_host_name ());
+                 gtk_box_pack_start (GTK_BOX (panel->priv->hbox), panel->priv->hostname_label, FALSE, FALSE, 6);
+                 gtk_widget_show (panel->priv->hostname_label);
+         }
+ 
+         if (!panel->priv->display_is_local || get_show_restart_buttons (panel)) {
+                 GtkWidget *menu_item;
+                 GtkWidget *image;
+ 
+                 panel->priv->shutdown_button = gtk_toggle_button_new ();
+ 
+                 gtk_widget_set_tooltip_text (panel->priv->shutdown_button,
+                                              _("Shutdown Options..."));
+                 gtk_button_set_relief (GTK_BUTTON (panel->priv->shutdown_button),
+                                        GTK_RELIEF_NONE);
+ 
+                 panel->priv->shutdown_menu = gtk_menu_new ();
+                 gtk_menu_attach_to_widget (GTK_MENU (panel->priv->shutdown_menu),
+                                            panel->priv->shutdown_button, NULL);
+                 g_signal_connect_swapped (panel->priv->shutdown_button, "toggled",
+                                           G_CALLBACK (on_shutdown_button_toggled), panel);
+                 g_signal_connect_swapped (panel->priv->shutdown_menu, "deactivate",
+                                           G_CALLBACK (on_shutdown_menu_deactivate), panel);
+ 
+                 image = gtk_image_new_from_icon_name ("system-shutdown", GTK_ICON_SIZE_BUTTON);
+                 gtk_widget_show (image);
+                 gtk_container_add (GTK_CONTAINER (panel->priv->shutdown_button), image);
+ 
+                 if (! panel->priv->display_is_local) {
+                         menu_item = gtk_menu_item_new_with_label ("Disconnect");
+-                        g_signal_connect (G_OBJECT (menu_item), "activate", G_CALLBACK (do_disconnect), NULL);
++                        g_signal_connect (G_OBJECT (menu_item), "activate", G_CALLBACK (do_disconnect), panel);
+                         gtk_menu_shell_append (GTK_MENU_SHELL (panel->priv->shutdown_menu), menu_item);
+                 } else if (get_show_restart_buttons (panel)) {
+                         if (can_suspend ()) {
+                                 menu_item = gtk_menu_item_new_with_label (_("Suspend"));
+                                 g_signal_connect (G_OBJECT (menu_item), "activate", G_CALLBACK (do_system_suspend), NULL);
+                                 gtk_menu_shell_append (GTK_MENU_SHELL (panel->priv->shutdown_menu), menu_item);
+                         }
+ 
+                         menu_item = gtk_menu_item_new_with_label (_("Restart"));
+                         g_signal_connect (G_OBJECT (menu_item), "activate", G_CALLBACK (do_system_restart), NULL);
+                         gtk_menu_shell_append (GTK_MENU_SHELL (panel->priv->shutdown_menu), menu_item);
+ 
+                         menu_item = gtk_menu_item_new_with_label (_("Shut Down"));
+                         g_signal_connect (G_OBJECT (menu_item), "activate", G_CALLBACK (do_system_stop), NULL);
+                         gtk_menu_shell_append (GTK_MENU_SHELL (panel->priv->shutdown_menu), menu_item);
+                 }
+ 
+                 gtk_box_pack_end (GTK_BOX (panel->priv->hbox), GTK_WIDGET (panel->priv->shutdown_button), FALSE, FALSE, 0);
+                 gtk_widget_show_all (panel->priv->shutdown_menu);
+                 gtk_widget_show_all (GTK_WIDGET (panel->priv->shutdown_button));
+         }
+ 
+         panel->priv->clock = gdm_clock_widget_new ();
+         gtk_box_pack_end (GTK_BOX (panel->priv->hbox),
+                             GTK_WIDGET (panel->priv->clock), FALSE, FALSE, 6);
+         gtk_widget_show (panel->priv->clock);
+ 
+         panel->priv->keyboard_indicator_widget = gkbd_indicator_new ();
+ 
+         gtk_box_pack_end (GTK_BOX (panel->priv->hbox),
+@@ -1027,60 +1029,71 @@ gdm_greeter_panel_class_init (GdmGreeterPanelClass *klass)
+                               1, G_TYPE_STRING);
+ 
+         signals[SESSION_SELECTED] =
+                 g_signal_new ("session-selected",
+                               G_TYPE_FROM_CLASS (object_class),
+                               G_SIGNAL_RUN_LAST,
+                               G_STRUCT_OFFSET (GdmGreeterPanelClass, session_selected),
+                               NULL,
+                               NULL,
+                               g_cclosure_marshal_VOID__STRING,
+                               G_TYPE_NONE,
+                               1, G_TYPE_STRING);
+ 
+         g_object_class_install_property (object_class,
+                                          PROP_MONITOR,
+                                          g_param_spec_int ("monitor",
+                                                            "Xinerama monitor",
+                                                            "The monitor (in terms of Xinerama) which the window is on",
+                                                            0,
+                                                            G_MAXINT,
+                                                            0,
+                                                            G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+         g_object_class_install_property (object_class,
+                                          PROP_DISPLAY_IS_LOCAL,
+                                          g_param_spec_boolean ("display-is-local",
+                                                                "display is local",
+                                                                "display is local",
+                                                                FALSE,
+                                                                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+ 
++        signals [DISCONNECTED] =
++                g_signal_new ("disconnected",
++                              G_TYPE_FROM_CLASS (object_class),
++                              G_SIGNAL_RUN_LAST,
++                              G_STRUCT_OFFSET (GdmGreeterPanelClass, disconnected),
++                              NULL,
++                              NULL,
++                              g_cclosure_marshal_VOID__VOID,
++                              G_TYPE_NONE,
++                              0);
++
+         g_type_class_add_private (klass, sizeof (GdmGreeterPanelPrivate));
+ }
+ 
+ GtkWidget *
+ gdm_greeter_panel_new (GdkScreen *screen,
+                        int        monitor,
+                        gboolean   is_local)
+ {
+         GObject *object;
+ 
+         object = g_object_new (GDM_TYPE_GREETER_PANEL,
+                                "screen", screen,
+                                "monitor", monitor,
+                                "display-is-local", is_local,
+                                NULL);
+ 
+         return GTK_WIDGET (object);
+ }
+ 
+ void
+ gdm_greeter_panel_show_user_options (GdmGreeterPanel *panel)
+ {
+         gtk_widget_show (panel->priv->session_option_widget);
+         gtk_widget_show (panel->priv->language_option_widget);
+ }
+ 
+ void
+ gdm_greeter_panel_hide_user_options (GdmGreeterPanel *panel)
+ {
+         gtk_widget_hide (panel->priv->session_option_widget);
+diff --git a/gui/simple-greeter/gdm-greeter-panel.h b/gui/simple-greeter/gdm-greeter-panel.h
+index 1354371..d383b18 100644
+--- a/gui/simple-greeter/gdm-greeter-panel.h
++++ b/gui/simple-greeter/gdm-greeter-panel.h
+@@ -23,49 +23,50 @@
+ 
+ #include <glib-object.h>
+ #include <gtk/gtk.h>
+ 
+ G_BEGIN_DECLS
+ 
+ #define GDM_TYPE_GREETER_PANEL         (gdm_greeter_panel_get_type ())
+ #define GDM_GREETER_PANEL(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), GDM_TYPE_GREETER_PANEL, GdmGreeterPanel))
+ #define GDM_GREETER_PANEL_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST((k), GDM_TYPE_GREETER_PANEL, GdmGreeterPanelClass))
+ #define GDM_IS_GREETER_PANEL(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), GDM_TYPE_GREETER_PANEL))
+ #define GDM_IS_GREETER_PANEL_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), GDM_TYPE_GREETER_PANEL))
+ #define GDM_GREETER_PANEL_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o), GDM_TYPE_GREETER_PANEL, GdmGreeterPanelClass))
+ 
+ typedef struct GdmGreeterPanelPrivate GdmGreeterPanelPrivate;
+ 
+ typedef struct
+ {
+         GtkWindow               parent;
+         GdmGreeterPanelPrivate *priv;
+ } GdmGreeterPanel;
+ 
+ typedef struct
+ {
+         GtkWindowClass   parent_class;
+ 
+         void (* language_selected)           (GdmGreeterPanel *panel,
+                                               const char      *text);
+ 
+         void (* session_selected)            (GdmGreeterPanel *panel,
+                                               const char      *text);
++        void (* disconnected)                (GdmGreeterPanel *panel);
+ } GdmGreeterPanelClass;
+ 
+ GType                  gdm_greeter_panel_get_type                       (void);
+ 
+ GtkWidget            * gdm_greeter_panel_new                            (GdkScreen *screen,
+                                                                          int        monitor,
+                                                                          gboolean   is_local);
+ 
+ void                   gdm_greeter_panel_show_user_options              (GdmGreeterPanel *panel);
+ void                   gdm_greeter_panel_hide_user_options              (GdmGreeterPanel *panel);
+ void                   gdm_greeter_panel_reset                          (GdmGreeterPanel *panel);
+ 
+ void                   gdm_greeter_panel_set_default_language_name      (GdmGreeterPanel *panel,
+                                                                          const char      *language_name);
+ void                   gdm_greeter_panel_set_default_session_name       (GdmGreeterPanel *panel,
+                                                                          const char      *session_name);
+ G_END_DECLS
+ 
+ #endif /* __GDM_GREETER_PANEL_H */
+diff --git a/gui/simple-greeter/gdm-greeter-session.c b/gui/simple-greeter/gdm-greeter-session.c
+index 41c0b91..1f2e571 100644
+--- a/gui/simple-greeter/gdm-greeter-session.c
++++ b/gui/simple-greeter/gdm-greeter-session.c
+@@ -268,62 +268,61 @@ on_select_session (GdmGreeterSession     *session,
+                                                 text);
+ }
+ 
+ static void
+ on_select_language (GdmGreeterSession     *session,
+                     const char            *text)
+ {
+         gdm_greeter_client_call_select_language (session->priv->client,
+                                                  text);
+ }
+ 
+ static void
+ on_select_user (GdmGreeterLoginWindow *login_window,
+                 const char            *text,
+                 GdmGreeterSession     *session)
+ {
+         show_or_hide_user_options (session, text);
+         gdm_greeter_client_call_select_user (session->priv->client,
+                                              text);
+ }
+ 
+ static void
+ on_cancelled (GdmGreeterLoginWindow *login_window,
+               GdmGreeterSession     *session)
+ {
+         gdm_greeter_panel_hide_user_options (GDM_GREETER_PANEL (session->priv->panel));
+         gdm_greeter_client_call_cancel (session->priv->client);
+ }
+ 
+ static void
+-on_disconnected (GdmGreeterLoginWindow *login_window,
+-                 GdmGreeterSession     *session)
++on_disconnected (GdmGreeterSession     *session)
+ {
+         gdm_greeter_client_call_disconnect (session->priv->client);
+ }
+ 
+ static void
+ on_start_session (GdmGreeterLoginWindow *login_window,
+                   const char            *service_name,
+                   GdmGreeterSession     *session)
+ {
+         gdm_greeter_client_call_start_session_when_ready (session->priv->client, service_name, TRUE);
+ }
+ 
+ static int
+ get_tallest_monitor_at_point (GdkScreen *screen,
+                               int        x,
+                               int        y)
+ {
+         GdkRectangle area;
+         GdkRegion *region;
+         int i;
+         int monitor;
+         int n_monitors;
+         int tallest_height;
+ 
+         tallest_height = 0;
+         n_monitors = gdk_screen_get_n_monitors (screen);
+         monitor = -1;
+         for (i = 0; i < n_monitors; i++) {
+                 gdk_screen_get_monitor_geometry (screen, i, &area);
+                 region = gdk_region_rectangle (&area);
+@@ -347,115 +346,115 @@ get_tallest_monitor_at_point (GdkScreen *screen,
+ static void
+ toggle_panel (GdmGreeterSession *session,
+               gboolean           enabled)
+ {
+         gdm_profile_start (NULL);
+ 
+         if (enabled) {
+                 GdkDisplay *display;
+                 GdkScreen  *screen;
+                 int         monitor;
+                 int         x, y;
+                 gboolean    is_local;
+ 
+                 display = gdk_display_get_default ();
+                 gdk_display_get_pointer (display, &screen, &x, &y, NULL);
+ 
+                 monitor = get_tallest_monitor_at_point (screen, x, y);
+ 
+                 is_local = gdm_greeter_client_get_display_is_local (session->priv->client);
+                 session->priv->panel = gdm_greeter_panel_new (screen, monitor, is_local);
+ 
+                 g_signal_connect_swapped (session->priv->panel,
+                                           "language-selected",
+                                           G_CALLBACK (on_select_language),
+                                           session);
+ 
+                 g_signal_connect_swapped (session->priv->panel,
+                                           "session-selected",
+                                           G_CALLBACK (on_select_session),
+                                           session);
++                g_signal_connect_swapped (session->priv->panel,
++                                          "disconnected",
++                                          G_CALLBACK (on_disconnected),
++                                          session);
+ 
+                 gtk_widget_show (session->priv->panel);
+         } else {
+                 gtk_widget_destroy (session->priv->panel);
+                 session->priv->panel = NULL;
+         }
+ 
+         gdm_profile_end (NULL);
+ }
+ 
+ static void
+ toggle_login_window (GdmGreeterSession *session,
+                      gboolean           enabled)
+ {
+         gdm_profile_start (NULL);
+ 
+         if (enabled) {
+                 gboolean is_local;
+ 
+                 is_local = gdm_greeter_client_get_display_is_local (session->priv->client);
+                 g_debug ("GdmGreeterSession: Starting a login window local:%d", is_local);
+                 session->priv->login_window = gdm_greeter_login_window_new (is_local);
+                 g_signal_connect (session->priv->login_window,
+                                   "start-conversation",
+                                   G_CALLBACK (on_start_conversation),
+                                   session);
+                 g_signal_connect (session->priv->login_window,
+                                   "begin-auto-login",
+                                   G_CALLBACK (on_begin_auto_login),
+                                   session);
+                 g_signal_connect (session->priv->login_window,
+                                   "begin-verification",
+                                   G_CALLBACK (on_begin_verification),
+                                   session);
+                 g_signal_connect (session->priv->login_window,
+                                   "begin-verification-for-user",
+                                   G_CALLBACK (on_begin_verification_for_user),
+                                   session);
+                 g_signal_connect (session->priv->login_window,
+                                   "query-answer",
+                                   G_CALLBACK (on_query_answer),
+                                   session);
+                 g_signal_connect (session->priv->login_window,
+                                   "user-selected",
+                                   G_CALLBACK (on_select_user),
+                                   session);
+                 g_signal_connect (session->priv->login_window,
+                                   "cancelled",
+                                   G_CALLBACK (on_cancelled),
+                                   session);
+                 g_signal_connect (session->priv->login_window,
+-                                  "disconnected",
+-                                  G_CALLBACK (on_disconnected),
+-                                  session);
+-                g_signal_connect (session->priv->login_window,
+                                   "start-session",
+                                   G_CALLBACK (on_start_session),
+                                   session);
+                 gtk_widget_show (session->priv->login_window);
+         } else {
+                 gtk_widget_destroy (session->priv->login_window);
+                 session->priv->login_window = NULL;
+         }
+         gdm_profile_end (NULL);
+ }
+ 
+ gboolean
+ gdm_greeter_session_start (GdmGreeterSession *session,
+                            GError           **error)
+ {
+         gboolean res;
+ 
+         g_return_val_if_fail (GDM_IS_GREETER_SESSION (session), FALSE);
+ 
+         gdm_profile_start (NULL);
+ 
+         res = gdm_greeter_client_start (session->priv->client, error);
+ 
+         toggle_panel (session, TRUE);
+         toggle_login_window (session, TRUE);
+ 
+         gdm_profile_end (NULL);
+ 
+         return res;
+ }
+-- 
+1.9.3
+
+
+From 22d8f7306468e318f57fa3680f8c2a527bd02f10 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Thu, 3 Feb 2011 17:33:02 -0500
+Subject: [PATCH 2/2] daemon: stop slave when user disconnects
+
+Previously, we would ignore any disconnect
+requests and then the greeter would stick
+around.
+---
+ daemon/gdm-simple-slave.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/daemon/gdm-simple-slave.c b/daemon/gdm-simple-slave.c
+index 6eeb050..c428eed 100644
+--- a/daemon/gdm-simple-slave.c
++++ b/daemon/gdm-simple-slave.c
+@@ -1140,60 +1140,77 @@ on_greeter_cancel (GdmGreeterServer *greeter_server,
+         g_debug ("GdmSimpleSlave: Greeter cancelled");
+         if (slave->priv->greeter_reset_id > 0) {
+                 return;
+         }
+         reset_session (slave);
+         queue_greeter_reset (slave);
+ }
+ 
+ static void
+ on_greeter_connected (GdmGreeterServer *greeter_server,
+                       GdmSimpleSlave   *slave)
+ {
+         gboolean display_is_local;
+ 
+         g_debug ("GdmSimpleSlave: Greeter connected");
+         if (slave->priv->greeter_reset_id > 0) {
+                 return;
+         }
+ 
+         g_object_get (slave,
+                       "display-is-local", &display_is_local,
+                       NULL);
+ 
+         /* If XDMCP stop pinging */
+         if ( ! display_is_local) {
+                 alarm (0);
+         }
+ }
+ 
+ static void
++on_greeter_disconnected (GdmGreeterServer *greeter_server,
++                         GdmSimpleSlave   *slave)
++{
++        gboolean display_is_local;
++
++        g_debug ("GdmSimpleSlave: Greeter disconnected");
++
++        g_object_get (slave,
++                      "display-is-local", &display_is_local,
++                      NULL);
++
++        if ( ! display_is_local) {
++                gdm_slave_stopped (GDM_SLAVE (slave));
++        }
++}
++
++static void
+ on_start_session_when_ready (GdmGreeterServer *session,
+                              const char       *service_name,
+                              GdmSimpleSlave   *slave)
+ {
+         g_debug ("GdmSimpleSlave: Will start session when ready");
+         if (slave->priv->greeter_reset_id > 0) {
+                 return;
+         }
+         slave->priv->start_session_when_ready = TRUE;
+ 
+         if (slave->priv->waiting_to_start_session) {
+                 gdm_simple_slave_accredit_when_ready (slave, service_name);
+         }
+ }
+ 
+ static void
+ on_start_session_later (GdmGreeterServer *session,
+                         const char       *service_name,
+                         GdmSimpleSlave   *slave)
+ {
+         g_debug ("GdmSimpleSlave: Will start session when ready and told");
+         if (slave->priv->greeter_reset_id > 0) {
+                 return;
+         }
+         slave->priv->start_session_when_ready = FALSE;
+ }
+ 
+ static gboolean
+ plymouth_is_running (void)
+ {
+@@ -1347,60 +1364,64 @@ start_greeter (GdmSimpleSlave *slave)
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "begin-verification-for-user",
+                           G_CALLBACK (on_greeter_begin_verification_for_user),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "query-answer",
+                           G_CALLBACK (on_greeter_answer),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "session-selected",
+                           G_CALLBACK (on_greeter_session_selected),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "language-selected",
+                           G_CALLBACK (on_greeter_language_selected),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "layout-selected",
+                           G_CALLBACK (on_greeter_layout_selected),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "user-selected",
+                           G_CALLBACK (on_greeter_user_selected),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "connected",
+                           G_CALLBACK (on_greeter_connected),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
++                          "disconnected",
++                          G_CALLBACK (on_greeter_disconnected),
++                          slave);
++        g_signal_connect (slave->priv->greeter_server,
+                           "cancelled",
+                           G_CALLBACK (on_greeter_cancel),
+                           slave);
+         g_signal_connect (slave->priv->greeter_server,
+                           "start-session-when-ready",
+                           G_CALLBACK (on_start_session_when_ready),
+                           slave);
+ 
+         g_signal_connect (slave->priv->greeter_server,
+                           "start-session-later",
+                           G_CALLBACK (on_start_session_later),
+                           slave);
+ 
+         gdm_greeter_server_start (slave->priv->greeter_server);
+ 
+         g_debug ("GdmSimpleSlave: Creating greeter on %s %s %s", display_name, display_device, display_hostname);
+         slave->priv->greeter = gdm_greeter_session_new (display_name,
+                                                         display_device,
+                                                         display_hostname,
+                                                         display_is_local);
+         g_signal_connect (slave->priv->greeter,
+                           "started",
+                           G_CALLBACK (on_greeter_session_start),
+                           slave);
+         g_signal_connect (slave->priv->greeter,
+                           "stopped",
+                           G_CALLBACK (on_greeter_session_stop),
+                           slave);
+         g_signal_connect (slave->priv->greeter,
+                           "exited",
+-- 
+1.9.3
+
+diff -up gdm-2.30.4/gui/simple-chooser/gdm-host-chooser-widget.c.fix-xdmcp-fill gdm-2.30.4/gui/simple-chooser/gdm-host-chooser-widget.c
+--- gdm-2.30.4/gui/simple-chooser/gdm-host-chooser-widget.c.fix-xdmcp-fill	2014-06-23 08:18:34.226999769 -0400
++++ gdm-2.30.4/gui/simple-chooser/gdm-host-chooser-widget.c	2014-06-23 08:18:56.175999568 -0400
+@@ -208,7 +208,7 @@ decode_packet (GIOChannel           *sou
+                 return TRUE;
+         }
+ 
+-        ss_len = (int)gdm_sockaddr_len (&clnt_ss);
++        ss_len = (int) sizeof (clnt_ss);
+ 
+         res = XdmcpFill (widget->priv->socket_fd, &buf, (XdmcpNetaddr)&clnt_ss, &ss_len);
+         if G_UNLIKELY (! res) {

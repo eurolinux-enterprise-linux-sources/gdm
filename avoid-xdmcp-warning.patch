@@ -1,0 +1,35 @@
+From 3668752938ed67a89527917b538fb1aa99bc0e76 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 20 Jun 2014 10:56:29 -0400
+Subject: [PATCH] session: avoid warning in log when logging in with XDMCP
+
+We unconditionally try to set WINDOWPATH in the user session, but
+WINDOWPATH doesn't get set for XDMCP since the X server isn't running
+on a VT and it's not nested.
+
+This commit just avoids trying to put WINDOWPATH in the user session
+if there is no WINDOWPATH to put.
+---
+ daemon/gdm-session-direct.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/daemon/gdm-session-direct.c b/daemon/gdm-session-direct.c
+index af6d2e4..6478c94 100644
+--- a/daemon/gdm-session-direct.c
++++ b/daemon/gdm-session-direct.c
+@@ -2088,10 +2088,11 @@ setup_session_environment (GdmSessionDir
+                                                              session->priv->user_x11_authority_file);
+         }
+ 
+-        gdm_session_direct_set_environment_variable (session,
+-                                                     "WINDOWPATH",
+-                                                     g_getenv ("WINDOWPATH"));
+-
++        if (g_getenv ("WINDOWPATH") != NULL) {
++                gdm_session_direct_set_environment_variable (session,
++                                                             "WINDOWPATH",
++                                                             g_getenv ("WINDOWPATH"));
++        }
+ 
+         /* FIXME: We do this here and in the session worker.  We should consolidate
+          * somehow.

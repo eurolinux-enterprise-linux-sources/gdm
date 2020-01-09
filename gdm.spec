@@ -14,7 +14,7 @@
 Summary: The GNOME Display Manager
 Name: gdm
 Version: 2.30.4
-Release: 52%{?dist}
+Release: 64%{?dist}
 Epoch: 1
 License: GPLv2+
 Group: User Interface/X
@@ -175,12 +175,36 @@ Patch28: fix-locale-interoperability-with-osx.patch
 # https://bugzilla.redhat.com/show_bug.cgi?id=1006947
 Patch29: run-headless-if-no-local-Xserver.patch
 
+# https://bugzilla.redhat.com/show_bug.cgi?id=992907
+Patch30: force-vt1-initially.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1004484
+Patch31: hide-switch-user-under-kdm.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1004909
+Patch32: avoid-xdmcp-warning.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1048769
+Patch33: fix-user-switching-crash.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1013351
+Patch34: add-remotely-usable-xauth-cookies.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1030163
+Patch35: fix-addr-debug-fail.patch
+
 Patch96: gdm-multistack.patch
 
 # Distro-specific
 Patch97: gdm-bubble-location.patch
 Patch98: tray-padding.patch
 Patch99: gdm-2.23.1-system-logo.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1073546
+Patch100: fix-login-window-spew.patch
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=827257
+Patch101: more-xdmcp-fixes.patch
 
 %package user-switch-applet
 Summary:   GDM User Switcher Panel Applet
@@ -253,11 +277,19 @@ The GDM libs subpackage contains experimental libraries for developing GDM plugi
 %patch27 -p1 -b .fix-user-switch-spew
 %patch28 -p1 -b .fix-locale-interoperability-with-osx
 %patch29 -p1 -b .run-headless-when-no-xserver
+%patch30 -p1 -b .force-vt1-initially
+%patch31 -p1 -b .hide-switch-user-under-kdm
+%patch32 -p1 -b .avoid-xdmcp-warning
+%patch33 -p1 -b .fix-user-switching-crash
+%patch34 -p1 -b .add-remotely-usable-xauth-cookies
+%patch35 -p1 -b .fix-addr-debug-fail
 
 %patch96 -p1 -b .multistack
 %patch97 -p1 -b .bubble-location
 %patch98 -p1 -b .tray-padding
 %patch99 -p1 -b .fedora-logo
+%patch100 -p1 -b .fix-login-window-spew
+%patch101 -p1 -b .more-xdmcp-fixes
 
 autoreconf -i -f
 
@@ -515,6 +547,55 @@ fi
 %{_libdir}/libgdm*.so*
 
 %changelog
+* Wed Sep 10 2014 Ray Strode <rstrode@redhat.com> 2.30.4-64
+- One more crack at user switching crash
+  Resolves: #1048769
+
+* Mon Aug 04 2014 Ray Strode <rstrode@redhat.com> 2.30.4-63
+- Be more resiliant against misconfigured nameservers
+  Related: #1030163
+
+* Mon Jun 23 2014 Ray Strode <rstrode@redhat.com> 2.30.4-62
+- More XDMCP fixes
+  Related: #827257
+
+* Sun Jun 22 2014 Ray Strode <rstrode@redhat.com> 2.30.4-61
+- Fix infinite loop in debug code
+  Resolves: #1030163
+
+* Sun Jun 22 2014 Ray Strode <rstrode@redhat.com> 2.30.4-60
+- Add auth cookies for remote clients
+  Resolves: #1013351
+
+* Sun Jun 22 2014 Ray Strode <rstrode@redhat.com> 2.30.4-59
+- compiler warning fix
+  Related: #1073546
+
+* Sun Jun 22 2014 Ray Strode <rstrode@redhat.com> 2.30.4-58
+- Fix this log spew:
+      Buggy client sent a _NET_ACTIVE_WINDOW message with a timestamp of 0 for 0x260002b (Login Wind)
+  Resolves: #1073546
+
+* Fri Jun 20 2014 Ray Strode <rstrode@redhat.com> 2.30.4-57
+- Fix sporadic crash in user switching applet at login
+  Resolves: #1048769
+
+* Fri Jun 20 2014 Ray Strode <rstrode@redhat.com> 2.30.4-56
+- add a check to prevent spew in slave log when logging in with XDMCP
+  Resolves: #1004909
+
+* Fri Jun 20 2014 Ray Strode <rstrode@redhat.com> 2.30.4-55
+- Update VT1 patch to prevent warning in log
+  Related: #992907
+
+* Thu Jun 19 2014 Ray Strode <rstrode@redhat.com> 2.30.4-54
+- Hide user switch applet under kdm
+  Resolves: #1004484
+
+* Thu Jun 19 2014 Ray Strode <rstrode@redhat.com> 2.30.4-53
+- Force VT1 for the initial displays VT.
+  Resolves: #992907
+
 * Thu Sep 26 2013 Ray Strode <rstrode@redhat.com> 2.30.4-52
 - Fix smartcard authentication after PIN failure
   Resolves: #977560
