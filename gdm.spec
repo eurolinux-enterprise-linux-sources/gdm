@@ -10,7 +10,7 @@
 Name: gdm
 Epoch: 1
 Version: 3.28.2
-Release: 11%{?dist}
+Release: 12%{?dist}.1
 Summary: The GNOME Display Manager
 
 License: GPLv2+
@@ -40,6 +40,8 @@ Patch65: 0006-daemon-ensure-is-initial-bit-is-transferred-to-new-l.patch
 Patch66: 0007-local-display-factory-try-even-harder-to-get-to-a-lo.patch
 
 Patch70: 0001-daemon-gdm-session-record.c-open-close-the-utmp-data.patch
+
+Patch81: 0001-manager-allow-multiple-xdmcp-logins-for-the-same-use.patch
 
 Patch90: audit-4.patch
 Patch91: clear-screen.patch
@@ -359,6 +361,15 @@ gtk-update-icon-cache %{_datadir}/icons/hicolor >&/dev/null || :
 %{_libdir}/pkgconfig/gdm-pam-extensions.pc
 
 %changelog
+* Thu Mar 28 2019 Ray Strode <rstrode@redhat.com> - 3.28.2-12.1
+- Fix unlock on XDMCP sessions
+  Resolves: #1693967
+
+* Thu Dec 20 2018 Ray Strode <rstrode@redhat.com> 3.28.2-12
+- Allow multiple simultaneous XDMCP logins for a user if
+  xdmcp/AllowMultipleSessionsPerUser=true
+  Resolves: #1679914
+
 * Mon Dec 03 2018 Ray Strode <rstrode@redhat.com> - 3.28.2-11
 - Don't assume X server defaults to local only
   Resolves: #1647621
