@@ -1,0 +1,159 @@
+From 18770aa5b3644abac1879d4eb754351e24072bc2 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Mon, 14 May 2018 15:49:50 -0400
+Subject: [PATCH] libgdm: fix pointer/boolean task confusion
+
+The manager fetching code in GdmClient treats its task
+return value as boolean, but it's actually a pointer (the manager)
+
+This commit corrects the confusion.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=795940
+---
+ libgdm/gdm-client.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/libgdm/gdm-client.c b/libgdm/gdm-client.c
+index 294f4f4d0..58ede0aab 100644
+--- a/libgdm/gdm-client.c
++++ b/libgdm/gdm-client.c
+@@ -364,65 +364,67 @@ on_reauthentication_channel_opened (GdmManager         *manager,
+         GCancellable *cancellable;
+         char         *address;
+         GError       *error;
+ 
+         error = NULL;
+         if (!gdm_manager_call_open_reauthentication_channel_finish (manager,
+                                                                     &address,
+                                                                     result,
+                                                                     &error)) {
+                 g_task_return_error (task, error);
+                 g_object_unref (task);
+                 return;
+         }
+ 
+         cancellable = g_task_get_cancellable (task);
+         g_dbus_connection_new_for_address (address,
+                                            G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
+                                            NULL,
+                                            cancellable,
+                                            (GAsyncReadyCallback)
+                                            on_reauthentication_channel_connected,
+                                            task);
+ }
+ 
+ static void
+ on_got_manager_for_reauthentication (GdmClient           *client,
+                                      GAsyncResult        *result,
+                                      GTask               *task)
+ {
+         GCancellable *cancellable;
++        GdmManager   *manager;
+         char         *username;
+         GError       *error;
+ 
+         error = NULL;
+-        if (!g_task_propagate_boolean (G_TASK (result), &error)) {
++        manager = g_task_propagate_pointer (G_TASK (result), &error);
++        if (manager == NULL) {
+                 g_task_return_error (task, error);
+                 g_object_unref (task);
+                 return;
+         }
+ 
+         cancellable = g_task_get_cancellable (task);
+         username = g_object_get_data (G_OBJECT (task), "username");
+         gdm_manager_call_open_reauthentication_channel (client->priv->manager,
+                                                         username,
+                                                         cancellable,
+                                                         (GAsyncReadyCallback)
+                                                         on_reauthentication_channel_opened,
+                                                         task);
+ 
+ }
+ 
+ static gboolean
+ gdm_client_open_connection_sync (GdmClient      *client,
+                                  GCancellable   *cancellable,
+                                  GError        **error)
+ {
+         gboolean ret;
+ 
+         g_return_val_if_fail (GDM_IS_CLIENT (client), FALSE);
+ 
+         if (client->priv->manager == NULL) {
+                 client->priv->manager = gdm_manager_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
+                                                                             G_DBUS_PROXY_FLAGS_NONE,
+                                                                             "org.gnome.DisplayManager",
+                                                                             "/org/gnome/DisplayManager/Manager",
+@@ -507,64 +509,66 @@ on_session_opened (GdmManager         *manager,
+         client = GDM_CLIENT (g_async_result_get_source_object (G_ASYNC_RESULT (task)));
+ 
+         error = NULL;
+         if (!gdm_manager_call_open_session_finish (manager,
+                                                    &client->priv->address,
+                                                    result,
+                                                    &error)) {
+                 g_task_return_error (task, error);
+                 g_object_unref (task);
+                 g_object_unref (client);
+                 return;
+         }
+ 
+         cancellable = g_task_get_cancellable (task);
+         g_dbus_connection_new_for_address (client->priv->address,
+                                            G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
+                                            NULL,
+                                            cancellable,
+                                            (GAsyncReadyCallback)
+                                            on_connected,
+                                            task);
+         g_object_unref (client);
+ }
+ 
+ static void
+ on_got_manager_for_opening_connection (GdmClient           *client,
+                                        GAsyncResult        *result,
+                                        GTask               *task)
+ {
+         GCancellable *cancellable;
++        GdmManager   *manager;
+         GError       *error;
+ 
+         error = NULL;
+-        if (!g_task_propagate_boolean (G_TASK (result), &error)) {
++        manager = g_task_propagate_pointer (G_TASK (result), &error);
++        if (manager == NULL) {
+                 g_task_return_error (task, error);
+                 g_object_unref (task);
+                 return;
+         }
+ 
+         cancellable = g_task_get_cancellable (task);
+         gdm_manager_call_open_session (client->priv->manager,
+                                        cancellable,
+                                        (GAsyncReadyCallback)
+                                        on_session_opened,
+                                        task);
+ }
+ 
+ static void
+ finish_pending_opens (GdmClient *client,
+                       GError    *error)
+ {
+     GList *node;
+ 
+     for (node = client->priv->pending_opens;
+          node != NULL;
+          node = node->next) {
+ 
+         GTask *task = node->data;
+ 
+         g_task_return_error (task, error);
+         g_object_unref (task);
+     }
+     g_clear_pointer (&client->priv->pending_opens,
+                      (GDestroyNotify) g_list_free);
+-- 
+2.20.1
+
