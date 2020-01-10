@@ -10,7 +10,7 @@
 Name: gdm
 Epoch: 1
 Version: 3.28.2
-Release: 12%{?dist}.1
+Release: 12%{?dist}.2
 Summary: The GNOME Display Manager
 
 License: GPLv2+
@@ -21,35 +21,37 @@ Source2: ja.po
 
 Patch0: 0001-Honor-initial-setup-being-disabled-by-distro-install.patch
 
-Patch20: 0001-Revert-session-forward-is-initial-from-display-to-wo.patch
-Patch21: 0001-worker-add-compat-patch-to-make-new-worker-work-with.patch
+Patch10001: 0001-Revert-session-forward-is-initial-from-display-to-wo.patch
+Patch20001: 0001-worker-add-compat-patch-to-make-new-worker-work-with.patch
 
 # breaks upgrades
-Patch40: 0001-Revert-data-Add-gnome-login.session.patch
+Patch40001: 0001-Revert-data-Add-gnome-login.session.patch
 # we don't have new enough dbus for this and don't need it with our old dbus
-Patch41: 0001-Revert-gdm-sessions-force-a-session-bus-for-non-seat.patch
+Patch50001: 0001-Revert-gdm-sessions-force-a-session-bus-for-non-seat.patch
 
-Patch50: 0001-data-change-cirrus-blacklist-to-use-gdm-disable-wayl.patch
+Patch60001: 0001-data-change-cirrus-blacklist-to-use-gdm-disable-wayl.patch
 
-Patch60: 0001-manager-plug-leak-in-maybe_activate_other_session.patch
-Patch61: 0002-manager-start-login-screen-if-old-one-is-finished.patch
-Patch62: 0003-manager-don-t-bail-if-session-disappears-out-from-un.patch
-Patch63: 0004-manager-make-get_login_window_session_id-fail-if-no-.patch
-Patch64: 0005-daemon-try-harder-to-get-to-a-login-screen-at-logout.patch
-Patch65: 0006-daemon-ensure-is-initial-bit-is-transferred-to-new-l.patch
-Patch66: 0007-local-display-factory-try-even-harder-to-get-to-a-lo.patch
+Patch70001: 0001-manager-plug-leak-in-maybe_activate_other_session.patch
+Patch70002: 0002-manager-start-login-screen-if-old-one-is-finished.patch
+Patch70003: 0003-manager-don-t-bail-if-session-disappears-out-from-un.patch
+Patch70004: 0004-manager-make-get_login_window_session_id-fail-if-no-.patch
+Patch70005: 0005-daemon-try-harder-to-get-to-a-login-screen-at-logout.patch
+Patch70006: 0006-daemon-ensure-is-initial-bit-is-transferred-to-new-l.patch
+Patch70007: 0007-local-display-factory-try-even-harder-to-get-to-a-lo.patch
 
-Patch70: 0001-daemon-gdm-session-record.c-open-close-the-utmp-data.patch
+Patch80001: 0001-daemon-gdm-session-record.c-open-close-the-utmp-data.patch
 
-Patch81: 0001-manager-allow-multiple-xdmcp-logins-for-the-same-use.patch
+Patch90001: 0001-manager-allow-multiple-xdmcp-logins-for-the-same-use.patch
 
-Patch90: audit-4.patch
-Patch91: clear-screen.patch
-Patch92: 0001-gdm.conf-custom.in-strip-out-reference-to-wayland.patch
-Patch93: system-dconf.patch
-Patch94: classic-session.patch
-Patch95: 0001-data-drop-pam_gdm-reintroduce-pam_env-postlogin.patch
-Patch96: 0001-configure-don-t-assume-x-server-defaults-to-local-on.patch
+Patch100001: 0001-local-display-factory-don-t-spawn-login-screen-if-ba.patch
+
+Patch900000: audit-4.patch
+Patch900001: clear-screen.patch
+Patch900002: 0001-gdm.conf-custom.in-strip-out-reference-to-wayland.patch
+Patch900003: system-dconf.patch
+Patch900004: classic-session.patch
+Patch900005: 0001-data-drop-pam_gdm-reintroduce-pam_env-postlogin.patch
+Patch900006: 0001-configure-don-t-assume-x-server-defaults-to-local-on.patch
 
 BuildRequires: pam-devel >= 0:%{pam_version}
 BuildRequires: desktop-file-utils >= %{desktop_file_utils_version}
@@ -109,6 +111,8 @@ Requires: systemd >= 186
 Requires: system-logos
 Requires: xorg-x11-server-utils
 Requires: xorg-x11-xinit
+
+Conflicts: xorg-x11-server-Xorg < 1.20.1-5.4
 
 Obsoletes: gdm-libs < 1:3.12.0-3
 Provides: gdm-libs%{?_isa} = %{epoch}:%{version}-%{release}
@@ -361,6 +365,10 @@ gtk-update-icon-cache %{_datadir}/icons/hicolor >&/dev/null || :
 %{_libdir}/pkgconfig/gdm-pam-extensions.pc
 
 %changelog
+* Wed Jun 12 2019 Ray Strode <rstrode@redhat.com> - 3.28.2-12.2
+- Don't bring up login screen if background session gets killed
+  Related: #1719361
+
 * Thu Mar 28 2019 Ray Strode <rstrode@redhat.com> - 3.28.2-12.1
 - Fix unlock on XDMCP sessions
   Resolves: #1693967
