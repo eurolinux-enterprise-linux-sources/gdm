@@ -1,0 +1,147 @@
+From a17354e67eab4a294c30ec3e8b407057c6fb5f80 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 3 Jul 2015 14:39:33 -0400
+Subject: [PATCH 4/8] server: add -audit 4 to default flags
+
+---
+ daemon/gdm-server.c    | 2 +-
+ daemon/gdm-x-session.c | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/daemon/gdm-server.c b/daemon/gdm-server.c
+index 83fba99c..5bd9725c 100644
+--- a/daemon/gdm-server.c
++++ b/daemon/gdm-server.c
+@@ -191,61 +191,61 @@ gdm_server_launch_sigusr1_thread_if_needed (void)
+         static GThread *sigusr1_thread;
+ 
+         if (sigusr1_thread == NULL) {
+                 sigusr1_thread = g_thread_new ("gdm SIGUSR1 catcher", sigusr1_thread_main, NULL);
+ 
+                 g_mutex_lock (&sigusr1_thread_mutex);
+                 while (!sigusr1_thread_running)
+                         g_cond_wait (&sigusr1_thread_cond, &sigusr1_thread_mutex);
+                 g_mutex_unlock (&sigusr1_thread_mutex);
+         }
+ }
+ 
+ static void
+ gdm_server_init_command (GdmServer *server)
+ {
+         gboolean debug = FALSE;
+         const char *debug_options;
+         const char *verbosity = "";
+ 
+         if (server->priv->command != NULL) {
+                 return;
+         }
+ 
+         gdm_settings_direct_get_boolean (GDM_KEY_DEBUG, &debug);
+         if (debug) {
+                 debug_options = " -logverbose 7 -core ";
+         } else {
+                 debug_options = "";
+         }
+ 
+-#define X_SERVER_ARG_FORMAT " -background none -noreset -verbose %s%s"
++#define X_SERVER_ARG_FORMAT " -background none -noreset -audit 4 -verbose %s%s"
+ 
+         /* This is a temporary hack to work around the fact that XOrg
+          * currently lacks support for multi-seat hotplugging for
+          * display devices. This bit should be removed as soon as XOrg
+          * gains native support for automatically enumerating usb
+          * based graphics adapters at start-up via udev. */
+ 
+         /* systemd ships an X server wrapper tool which simply invokes
+          * the usual X but ensures it only uses the display devices of
+          * the seat. */
+ 
+         /* We do not rely on this wrapper server if, a) the machine
+          * wasn't booted using systemd, or b) the wrapper tool is
+          * missing, or c) we are running for the main seat 'seat0'. */
+ 
+ #ifdef ENABLE_SYSTEMD_JOURNAL
+         /* For systemd, we don't have a log file but instead log to stdout,
+            so set it to the xserver's built-in default verbosity */
+         if (debug)
+             verbosity = "7 -logfile /dev/null";
+         else
+             verbosity = "3 -logfile /dev/null";
+ #endif
+ 
+         if (g_access (SYSTEMD_X_SERVER, X_OK) < 0) {
+                 goto fallback;
+         }
+ 
+         if (server->priv->display_seat_id == NULL ||
+             strcmp (server->priv->display_seat_id, "seat0") == 0) {
+diff --git a/daemon/gdm-x-session.c b/daemon/gdm-x-session.c
+index 88fe96f4..a499a342 100644
+--- a/daemon/gdm-x-session.c
++++ b/daemon/gdm-x-session.c
+@@ -247,60 +247,62 @@ spawn_x_server (State        *state,
+         }
+ 
+         g_ptr_array_add (arguments, "-displayfd");
+         g_ptr_array_add (arguments, display_fd_string);
+ 
+         g_ptr_array_add (arguments, "-auth");
+         g_ptr_array_add (arguments, auth_file);
+ 
+         /* If we were compiled with Xserver >= 1.17 we need to specify
+          * '-listen tcp' as the X server dosen't listen on tcp sockets
+          * by default anymore. In older versions we need to pass
+          * -nolisten tcp to disable listening on tcp sockets.
+          */
+ #ifdef HAVE_XSERVER_THAT_DEFAULTS_TO_LOCAL_ONLY
+         if (allow_remote_connections) {
+                 g_ptr_array_add (arguments, "-listen");
+                 g_ptr_array_add (arguments, "tcp");
+         }
+ #else
+         if (!allow_remote_connections) {
+                 g_ptr_array_add (arguments, "-nolisten");
+                 g_ptr_array_add (arguments, "tcp");
+         }
+ #endif
+ 
+         g_ptr_array_add (arguments, "-background");
+         g_ptr_array_add (arguments, "none");
+ 
+         g_ptr_array_add (arguments, "-noreset");
+         g_ptr_array_add (arguments, "-keeptty");
++        g_ptr_array_add (arguments, "-audit");
++        g_ptr_array_add (arguments, "4");
+ 
+         g_ptr_array_add (arguments, "-verbose");
+         if (state->debug_enabled) {
+                 g_ptr_array_add (arguments, "7");
+         } else {
+                 g_ptr_array_add (arguments, "3");
+         }
+ 
+         if (state->debug_enabled) {
+                 g_ptr_array_add (arguments, "-core");
+         }
+         g_ptr_array_add (arguments, NULL);
+ 
+         subprocess = g_subprocess_launcher_spawnv (launcher,
+                                                    (const char * const *) arguments->pdata,
+                                                    &error);
+         g_free (display_fd_string);
+         g_clear_object (&launcher);
+         g_ptr_array_free (arguments, TRUE);
+ 
+         if (subprocess == NULL) {
+                 g_debug ("could not start X server: %s", error->message);
+                 goto out;
+         }
+ 
+         input_stream = g_unix_input_stream_new (pipe_fds[0], TRUE);
+         data_stream = g_data_input_stream_new (input_stream);
+         g_clear_object (&input_stream);
+ 
+         display_number = g_data_input_stream_read_line (data_stream,
+-- 
+2.14.2
+

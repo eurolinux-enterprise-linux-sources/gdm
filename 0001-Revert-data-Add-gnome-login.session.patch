@@ -1,0 +1,212 @@
+From c35c3fa71f3ecdc4c12d4b90200e41c9ea658366 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 13 Oct 2017 13:56:22 -0400
+Subject: [PATCH] Revert "data: Add gnome-login.session"
+
+This reverts commit 1073f0e792d9d5bf9d53bddb6e51177c8024c2b3.
+---
+ data/Makefile.am                         | 12 ------------
+ data/dconf/defaults/00-upstream-settings |  2 +-
+ data/gnome-login.session.in              |  3 ---
+ 3 files changed, 1 insertion(+), 16 deletions(-)
+ delete mode 100644 data/gnome-login.session.in
+
+diff --git a/data/Makefile.am b/data/Makefile.am
+index a47e7900..f69ec12d 100644
+--- a/data/Makefile.am
++++ b/data/Makefile.am
+@@ -56,74 +56,63 @@ gsettings_SCHEMAS = org.gnome.login-screen.gschema.xml
+ 
+ schemasdir = $(pkgdatadir)
+ schemas_in_files = gdm.schemas.in
+ schemas_DATA = $(schemas_in_files:.schemas.in=.schemas)
+ 
+ gdm.schemas.in: $(srcdir)/gdm.schemas.in.in
+ 	sed	-e 's,[@]GDMPREFETCHCMD[@],$(GDMPREFETCHCMD),g' \
+ 		-e 's,[@]GDM_CUSTOM_CONF[@],$(GDM_CUSTOM_CONF),g' \
+ 		-e 's,[@]GDM_USER_PATH[@],$(GDM_USER_PATH),g' \
+ 		-e 's,[@]GDM_USERNAME[@],$(GDM_USERNAME),g' \
+ 		-e 's,[@]GDM_GROUPNAME[@],$(GDM_GROUPNAME),g' \
+ 		-e 's,[@]HALT_COMMAND[@],$(HALT_COMMAND),g' \
+ 		-e 's,[@]REBOOT_COMMAND[@],$(REBOOT_COMMAND),g' \
+ 		-e 's,[@]SOUND_PROGRAM[@],$(SOUND_PROGRAM),g' \
+ 		-e 's,[@]SUSPEND_COMMAND[@],$(SUSPEND_COMMAND),g' \
+ 		-e 's,[@]XEVIE_OPTION[@],$(XEVIE_OPTION),g' \
+ 		-e 's,[@]ALWAYS_RESTART_SERVER[@],$(ALWAYS_RESTART_SERVER),g' \
+ 		-e 's,[@]X_CONFIG_OPTIONS[@],$(X_CONFIG_OPTIONS),g' \
+ 		-e 's,[@]X_SERVER[@],$(X_SERVER),g' \
+ 		-e 's,[@]GDM_RBAC_SYSCMD_KEYS[@],$(GDM_RBAC_SYSCMD_KEYS),g' \
+ 		-e 's,[@]datadir[@],$(datadir),g' \
+ 		-e 's,[@]gdmconfdir[@],$(gdmconfdir),g' \
+ 		-e 's,[@]libdir[@],$(libdir),g' \
+ 		-e 's,[@]libexecdir[@],$(libexecdir),g' \
+ 		-e 's,[@]gdmlocaledir[@],$(gdmlocaledir),g' \
+ 		-e 's,[@]logdir[@],$(logdir),g' \
+ 		-e 's,[@]pixmapdir[@],$(pixmapdir),g' \
+ 		-e 's,[@]sbindir[@],$(sbindir),g' \
+ 		<$(srcdir)/gdm.schemas.in.in >gdm.schemas.in
+ 
+-
+-EXTRA_DIST += gnome-login.session.in
+-
+-gnome-login.session: $(srcdir)/gnome-login.session.in
+-	sed	-e 's,[@]libexecdir[@],$(libexecdir),g' \
+-		-e 's,[@]CHECK_ACCELERATED_DIR[@],$(CHECK_ACCELERATED_DIR),g' \
+-		< $< > $@.tmp && mv $@.tmp $@
+-
+ localealiasdir = $(datadir)/gdm
+ localealias_DATA = locale.alias
+ 
+-sessiondir = $(datadir)/gnome-session/sessions
+-session_DATA =  gnome-login.session
+-
+ pam_redhat_files = \
+ 	pam-redhat/gdm-autologin.pam		\
+ 	pam-redhat/gdm-launch-environment.pam	\
+ 	pam-redhat/gdm-fingerprint.pam		\
+ 	pam-redhat/gdm-smartcard.pam		\
+ 	pam-redhat/gdm-password.pam		\
+ 	pam-redhat/gdm-pin.pam			\
+ 	$(NULL)
+ EXTRA_DIST += $(pam_redhat_files)
+ 
+ pam_openembedded_files = pam-openembedded/gdm-password.pam	\
+ 	pam-openembedded/gdm-autologin.pam		\
+ 	pam-openembedded/gdm-launch-environment.pam	\
+ 	pam-openembedded/gdm-pin.pam			\
+ 	$(NULL)
+ EXTRA_DIST += $(pam_openembedded_files)
+ 
+ pam_exherbo_files = pam-exherbo/gdm-autologin.pam \
+ 	pam-exherbo/gdm-launch-environment.pam	 \
+ 	pam-exherbo/gdm-fingerprint.pam	         \
+ 	pam-exherbo/gdm-smartcard.pam            \
+ 	pam-exherbo/gdm-password.pam             \
+ 	pam-exherbo/gdm-pin.pam	                 \
+ 	$(NULL)
+ EXTRA_DIST += $(pam_exherbo_files)
+ 
+ pam_lfs_files = \
+ 	pam-lfs/gdm-autologin.pam		\
+ 	pam-lfs/gdm-launch-environment.pam	\
+ 	pam-lfs/gdm-fingerprint.pam		\
+@@ -164,61 +153,60 @@ udevrules_DATA = 61-gdm.rules
+ EXTRA_DIST +=			\
+ 	$(dconf_db_files)	\
+ 	$(schemas_in_files)	\
+ 	$(schemas_DATA)		\
+ 	$(dbusconf_in_files)	\
+ 	$(localealias_DATA)	\
+ 	$(udevrules_DATA)	\
+ 	gdm.schemas.in.in	\
+ 	gdm.conf-custom.in 	\
+ 	Xsession.in 		\
+ 	Init.in 		\
+ 	PreSession.in 		\
+ 	PostSession.in 		\
+ 	PostLogin 		\
+ 	org.gnome.login-screen.gschema.xml.in \
+ 	$(NULL)
+ 
+ CLEANFILES = 				\
+ 	Xsession			\
+ 	gdm.conf-custom			\
+ 	Init				\
+ 	PreSession			\
+ 	PostSession			\
+ 	$(gsettings_SCHEMAS)		\
+ 	greeter-dconf-defaults		\
+ 	$(NULL)
+ 
+ DISTCLEANFILES =			\
+ 	$(dbusconf_DATA)		\
+ 	gdm.schemas			\
+-	gnome-login.session		\
+ 	$(NULL)
+ 
+ MAINTAINERCLEANFILES =			\
+ 	*~				\
+ 	Makefile.in
+ 
+ systemdsystemunit =
+ 
+ gdm.service: $(srcdir)/gdm.service.in
+ 	$(AM_V_GEN)sed \
+ 		-e 's,[@]sbindir[@],$(sbindir),g' \
+ 		-e 's,[@]GDM_INITIAL_VT[@],$(GDM_INITIAL_VT),g' \
+ 		-e 's,[@]LANG_CONFIG_FILE[@],$(LANG_CONFIG_FILE),g' \
+ 		-e 's,[@]PLYMOUTH_QUIT_SERVICE[@],$(PLYMOUTH_QUIT_SERVICE),g' \
+ 		-e 's, *$$,,g' \
+ 		< $< > $@
+ systemdsystemunit += gdm.service
+ CLEANFILES += gdm.service
+ 
+ if INSTALL_SYSTEMD_UNITS
+ systemdsystemunit_DATA=$(systemdsystemunit)
+ systemdsystemunitdir=$(SYSTEMD_SYSTEM_UNIT_DIR)
+ endif
+ 
+ Xsession_files =
+ if ENABLE_GDM_XSESSION
+ 
+ Xsession: $(srcdir)/Xsession.in
+ 	sed	-e 's,[@]XSESSION_SHELL[@],$(XSESSION_SHELL),g' \
+ 		-e 's,[@]libexecdir[@],$(libexecdir),g' \
+diff --git a/data/dconf/defaults/00-upstream-settings b/data/dconf/defaults/00-upstream-settings
+index 603903e6..f109e0a9 100644
+--- a/data/dconf/defaults/00-upstream-settings
++++ b/data/dconf/defaults/00-upstream-settings
+@@ -1,40 +1,40 @@
+ # This file is part of the GDM packaging and should not be changed.
+ #
+ # Instead create your own file next to it with a higher numbered prefix,
+ # and run
+ #
+ #       dconf update
+ #
+ 
+ [org/gnome/desktop/session]
+-session-name='gnome-login'
++session-name='gnome'
+ 
+ [org/gnome/desktop/a11y]
+ always-show-universal-access-status=true
+ 
+ [org/gnome/desktop/background]
+ show-desktop-icons=false
+ 
+ [org/gnome/desktop/default-applications/terminal]
+ exec='true'
+ 
+ [org/gnome/desktop/lockdown]
+ disable-application-handlers=true
+ disable-command-line=true
+ disable-lock-screen=true
+ disable-log-out=false
+ disable-printing=true
+ disable-print-setup=true
+ disable-save-to-disk=true
+ disable-user-switching=true
+ 
+ [org/gnome/desktop/sound]
+ event-sounds=true
+ 
+ [org/gnome/settings-daemon/plugins/media-keys]
+ calculator=''
+ eject=''
+ email=''
+ help=''
+ home=''
+ media=''
+diff --git a/data/gnome-login.session.in b/data/gnome-login.session.in
+deleted file mode 100644
+index fbc10580..00000000
+--- a/data/gnome-login.session.in
++++ /dev/null
+@@ -1,3 +0,0 @@
+-[GNOME Session]
+-Name=Display Manager
+-RequiredComponents=org.gnome.Shell;org.gnome.SettingsDaemon.A11ySettings;org.gnome.SettingsDaemon.Clipboard;org.gnome.SettingsDaemon.Color;org.gnome.SettingsDaemon.Datetime;org.gnome.SettingsDaemon.Housekeeping;org.gnome.SettingsDaemon.Keyboard;org.gnome.SettingsDaemon.MediaKeys;org.gnome.SettingsDaemon.Mouse;org.gnome.SettingsDaemon.Power;org.gnome.SettingsDaemon.PrintNotifications;org.gnome.SettingsDaemon.Rfkill;org.gnome.SettingsDaemon.ScreensaverProxy;org.gnome.SettingsDaemon.Sharing;org.gnome.SettingsDaemon.Smartcard;org.gnome.SettingsDaemon.Sound;org.gnome.SettingsDaemon.Wacom;org.gnome.SettingsDaemon.XSettings;
+-- 
+1.8.3.1
+

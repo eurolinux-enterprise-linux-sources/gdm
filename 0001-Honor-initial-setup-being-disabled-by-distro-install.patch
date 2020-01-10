@@ -1,0 +1,210 @@
+From d4f6b620c4c1b56e7e6421cc470eb711d7faa0eb Mon Sep 17 00:00:00 2001
+From: Rui Matos <tiagomatos@gmail.com>
+Date: Mon, 23 Jan 2017 20:19:51 +0100
+Subject: [PATCH] Honor initial setup being disabled by distro installer
+
+Sysadmins might want to disable any kind of initial setup for their
+users, perhaps because they pre-configure their environments. We
+already provide a configuration file option for this but distro
+installers might have their own way of requesting this.
+
+At least the anaconda installer provides an option to skip any kind
+post-install setup tools so, for now we're only adding support for
+that but more might be added in the future.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=777708
+---
+ daemon/Makefile.am   |  1 +
+ daemon/gdm-display.c | 29 +++++++++++++++++++++++++++++
+ 2 files changed, 30 insertions(+)
+
+diff --git a/daemon/Makefile.am b/daemon/Makefile.am
+index 5e9eb5e0..3b1b1512 100644
+--- a/daemon/Makefile.am
++++ b/daemon/Makefile.am
+@@ -1,47 +1,48 @@
+ NULL =
+ 
+ AM_CPPFLAGS = \
+ 	-I.						\
+ 	-I..						\
+ 	-I$(top_srcdir)/common				\
+ 	-I$(top_srcdir)/pam-extensions			\
+ 	-I$(top_builddir)/common			\
+ 	-DBINDIR=\"$(bindir)\"				\
+ 	-DDATADIR=\"$(datadir)\"			\
+ 	-DDMCONFDIR=\"$(dmconfdir)\"			\
+ 	-DGDMCONFDIR=\"$(gdmconfdir)\"			\
+ 	-DLIBDIR=\"$(libdir)\"				\
+ 	-DLIBEXECDIR=\"$(libexecdir)\"			\
+ 	-DLOCALSTATEDIR=\"$(localstatedir)\"		\
+ 	-DLOGDIR=\"$(logdir)\"				\
+ 	-DSBINDIR=\"$(sbindir)\"			\
++	-DSYSCONFDIR=\"$(sysconfdir)\"			\
+ 	-DGNOMELOCALEDIR=\""$(datadir)/locale"\"	\
+ 	-DGDM_RUN_DIR=\"$(GDM_RUN_DIR)\"		\
+ 	-DGDM_XAUTH_DIR=\"$(GDM_XAUTH_DIR)\"		\
+ 	-DGDM_SCREENSHOT_DIR=\"$(GDM_SCREENSHOT_DIR)\"		\
+ 	-DGDM_CACHE_DIR=\""$(localstatedir)/cache/gdm"\"	\
+ 	-DGDM_SESSION_DEFAULT_PATH=\"$(GDM_SESSION_DEFAULT_PATH)\" \
+ 	$(DISABLE_DEPRECATED_CFLAGS)			\
+ 	$(DAEMON_CFLAGS)				\
+ 	$(XLIB_CFLAGS)					\
+ 	$(WARN_CFLAGS)					\
+ 	$(DEBUG_CFLAGS)					\
+ 	$(SYSTEMD_CFLAGS)				\
+ 	$(JOURNALD_CFLAGS)				\
+ 	$(LIBSELINUX_CFLAGS)	 			\
+ 	-DLANG_CONFIG_FILE=\"$(LANG_CONFIG_FILE)\"	\
+ 	$(NULL)
+ 
+ BUILT_SOURCES =					\
+ 	gdm-display-glue.h			\
+ 	gdm-manager-glue.h			\
+ 	gdm-local-display-glue.h		\
+ 	gdm-local-display-factory-glue.h	\
+ 	gdm-session-glue.h			\
+ 	gdm-session-worker-glue.h		\
+ 	gdm-session-enum-types.h		\
+ 	$(NULL)
+ 
+ gdm-session-enum-types.h: gdm-session-enum-types.h.in gdm-session.h
+ 	$(AM_V_GEN) glib-mkenums --template $^ > $@
+ 
+diff --git a/daemon/gdm-display.c b/daemon/gdm-display.c
+index 6a3984a9..30723da0 100644
+--- a/daemon/gdm-display.c
++++ b/daemon/gdm-display.c
+@@ -1522,100 +1522,129 @@ kernel_cmdline_initial_setup_force_state (gboolean *force_state)
+         GError *error = NULL;
+         gchar *contents = NULL;
+         gchar *setup_argument = NULL;
+ 
+         g_return_val_if_fail (force_state != NULL, FALSE);
+ 
+         if (!g_file_get_contents ("/proc/cmdline", &contents, NULL, &error)) {
+                 g_debug ("GdmDisplay: Could not check kernel parameters, not forcing initial setup: %s",
+                           error->message);
+                 g_clear_error (&error);
+                 return FALSE;
+         }
+ 
+         g_debug ("GdmDisplay: Checking kernel command buffer %s", contents);
+ 
+         if (!kernel_cmdline_initial_setup_argument (contents, &setup_argument, &error)) {
+                 g_debug ("GdmDisplay: Failed to read kernel commandline: %s", error->message);
+                 g_clear_pointer (&contents, g_free);
+                 return FALSE;
+         }
+ 
+         g_clear_pointer (&contents, g_free);
+ 
+         /* Poor-man's check for truthy or falsey values */
+         *force_state = setup_argument[0] == '1';
+ 
+         g_free (setup_argument);
+         return TRUE;
+ }
+ 
++static gboolean
++initial_setup_disabled_by_anaconda (void)
++{
++        GKeyFile *key_file;
++        const gchar *file_name = SYSCONFDIR "/sysconfig/anaconda";
++        gboolean disabled = FALSE;
++        GError *error = NULL;
++
++        key_file = g_key_file_new ();
++        if (!g_key_file_load_from_file (key_file, file_name, G_KEY_FILE_NONE, &error)) {
++                if (!g_error_matches (error, G_FILE_ERROR, G_FILE_ERROR_NOENT) &&
++                    !g_error_matches (error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_NOT_FOUND)) {
++                        g_warning ("Could not read %s: %s", file_name, error->message);
++                }
++                g_error_free (error);
++                goto out;
++        }
++
++        disabled = g_key_file_get_boolean (key_file, "General",
++                                           "post_install_tools_disabled", NULL);
++ out:
++        g_key_file_unref (key_file);
++        return disabled;
++}
++
+ static gboolean
+ wants_initial_setup (GdmDisplay *self)
+ {
+         gboolean enabled = FALSE;
+         gboolean forced = FALSE;
+ 
+         if (already_done_initial_setup_on_this_boot ()) {
+                 return FALSE;
+         }
+ 
+         if (kernel_cmdline_initial_setup_force_state (&forced)) {
+                 if (forced) {
+                         g_debug ("GdmDisplay: Forcing gnome-initial-setup");
+                         return TRUE;
+                 }
+ 
+                 g_debug ("GdmDisplay: Forceing no gnome-initial-setup");
+                 return FALSE;
+         }
+ 
+         /* don't run initial-setup on remote displays
+          */
+         if (!self->priv->is_local) {
+                 return FALSE;
+         }
+ 
+         /* don't run if the system has existing users */
+         if (self->priv->have_existing_user_accounts) {
+                 return FALSE;
+         }
+ 
+         /* don't run if initial-setup is unavailable */
+         if (!can_create_environment ("gnome-initial-setup")) {
+                 return FALSE;
+         }
+ 
+         if (!gdm_settings_direct_get_boolean (GDM_KEY_INITIAL_SETUP_ENABLE, &enabled)) {
+                 return FALSE;
+         }
+ 
++        if (initial_setup_disabled_by_anaconda ()) {
++                return FALSE;
++        }
++
+         return enabled;
+ }
+ 
+ void
+ gdm_display_start_greeter_session (GdmDisplay *self)
+ {
+         GdmSession    *session;
+         char          *display_name;
+         char          *seat_id;
+         char          *hostname;
+         char          *auth_file = NULL;
+ 
+         g_return_if_fail (g_strcmp0 (self->priv->session_class, "greeter") == 0);
+ 
+         g_debug ("GdmDisplay: Running greeter");
+ 
+         display_name = NULL;
+         seat_id = NULL;
+         hostname = NULL;
+ 
+         g_object_get (self,
+                       "x11-display-name", &display_name,
+                       "seat-id", &seat_id,
+                       "remote-hostname", &hostname,
+                       NULL);
+         if (self->priv->access_file != NULL) {
+                 auth_file = gdm_display_access_file_get_path (self->priv->access_file);
+         }
+ 
+         g_debug ("GdmDisplay: Creating greeter for %s %s", display_name, hostname);
+-- 
+2.14.2
+

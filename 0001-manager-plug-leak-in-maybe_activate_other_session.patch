@@ -1,0 +1,103 @@
+From 82006d15b70842d2b1ad7d47d9490e315436cb5f Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 22 Jun 2018 14:44:11 -0400
+Subject: [PATCH 1/7] manager: plug leak in maybe_activate_other_session
+
+The function asks logind what the currently active session is on the
+given seat.  It then leaks the response.
+
+This commit plugs the leak.
+---
+ daemon/gdm-manager.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/daemon/gdm-manager.c b/daemon/gdm-manager.c
+index 7539acf11..129cc0de4 100644
+--- a/daemon/gdm-manager.c
++++ b/daemon/gdm-manager.c
+@@ -1394,79 +1394,81 @@ get_login_window_session_id (const char  *seat_id,
+ out:
+         if (sessions) {
+                 for (i = 0; sessions[i]; i ++) {
+                         free (sessions[i]);
+                 }
+ 
+                 free (sessions);
+         }
+ 
+         return ret;
+ }
+ 
+ static void
+ activate_login_window_session_on_seat (GdmManager *self,
+                                        const char *seat_id)
+ {
+         char *session_id;
+ 
+         if (!get_login_window_session_id (seat_id, &session_id)) {
+                 return;
+         }
+ 
+         activate_session_id (self, seat_id, session_id);
+ }
+ 
+ static void
+ maybe_activate_other_session (GdmManager *self,
+                               GdmDisplay *old_display)
+ {
+         char *seat_id = NULL;
+-        char *session_id;
++        char *session_id = NULL;
+         int ret;
+ 
+         g_object_get (G_OBJECT (old_display),
+                       "seat-id", &seat_id,
+                       NULL);
+ 
+         ret = sd_seat_get_active (seat_id, &session_id, NULL);
+ 
+         if (ret == 0) {
+                 GdmDisplay *display;
+ 
+                 display = gdm_display_store_find (self->priv->display_store,
+                                                   lookup_by_session_id,
+                                                   (gpointer) session_id);
+ 
+                 if (display == NULL) {
+                         activate_login_window_session_on_seat (self, seat_id);
+                 }
++
++                g_free (session_id);
+         }
+ 
+         g_free (seat_id);
+ }
+ 
+ static const char *
+ get_username_for_greeter_display (GdmManager *manager,
+                                   GdmDisplay *display)
+ {
+         gboolean doing_initial_setup = FALSE;
+ 
+         g_object_get (G_OBJECT (display),
+                       "doing-initial-setup", &doing_initial_setup,
+                       NULL);
+ 
+         if (doing_initial_setup) {
+                 return INITIAL_SETUP_USERNAME;
+         } else {
+                 return GDM_USERNAME;
+         }
+ }
+ 
+ static void
+ set_up_automatic_login_session (GdmManager *manager,
+                                 GdmDisplay *display)
+ {
+         GdmSession *session;
+         char       *display_session_type = NULL;
+         gboolean is_initial;
+ 
+-- 
+2.19.0
+

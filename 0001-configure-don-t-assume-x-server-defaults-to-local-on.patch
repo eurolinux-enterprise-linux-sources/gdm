@@ -1,0 +1,86 @@
+From 56e545ff4c87685f50ee9c77e0faab0c44b4ee3c Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Mon, 3 Dec 2018 13:58:47 -0500
+Subject: [PATCH] configure: don't assume x server defaults to local only
+
+it doesn't in rhel.
+---
+ configure.ac | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 7ad55df84..4ed53027f 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1243,68 +1243,60 @@ elif test -x /usr/X11R6/bin/X; then
+    X_PATH="/usr/X11R6/bin"
+    X_SERVER_PATH="/usr/X11R6/bin"
+    X_SERVER="/usr/X11R6/bin/X"
+ elif test -x /usr/bin/Xorg; then
+    X_PATH="/usr/bin"
+    X_SERVER_PATH="/usr/bin"
+    X_SERVER="/usr/bin/Xorg"
+ elif test -x /usr/X11/bin/X; then
+    X_PATH="/usr/X11/bin"
+    X_SERVER_PATH="/usr/X11/bin"
+    X_SERVER="/usr/X11/bin/X"
+ elif test -x /usr/openwin/bin/Xsun; then
+    # Do not add /usr/openwin/bin here because on Solaris you need
+    # /usr/openwin/bin in your PATH even if you are using the Xorg
+    # Xserver.  We add this to the path below.
+    X_PATH="/usr/openwin/bin"
+    X_SERVER_PATH="/usr/openwin/bin"
+    X_SERVER="/usr/openwin/bin/Xsun"
+ elif test -x /opt/X11R6/bin/X; then
+    X_PATH="/opt/X11R6/bin"
+    X_SERVER_PATH="/opt/X11R6/bin"
+    X_SERVER="/opt/X11R6/bin/X"
+ else
+    # what to do, what to do, this is wrong, but this just sets the
+    # defaults, perhaps this user is cross compiling or some such
+    X_PATH="/usr/bin/X11:/usr/X11R6/bin:/opt/X11R6/bin"
+    X_SERVER_PATH="/usr/bin"
+    X_SERVER="/usr/bin/X"
+ fi
+ 
+-dnl ---------------------------------------------------------------------------
+-dnl - Check if Xorg is new enough to require '-listen tcp' (1.17)
+-dnl ---------------------------------------------------------------------------
+-
+-if $PKG_CONFIG --atleast-version=1.17 xorg-server; then
+-   AC_DEFINE([HAVE_XSERVER_THAT_DEFAULTS_TO_LOCAL_ONLY], [], [XServer disables tcp access by default])
+-fi
+-
+ dnl ---------------------------------------------------------------------------
+ dnl - Expand vars
+ dnl ---------------------------------------------------------------------------
+ 
+ AS_AC_EXPAND(LOCALSTATEDIR, $localstatedir)
+ AS_AC_EXPAND(SYSCONFDIR, $sysconfdir)
+ AS_AC_EXPAND(DATADIR, $datadir)
+ AS_AC_EXPAND(BINDIR, $bindir)
+ AS_AC_EXPAND(SBINDIR, $sbindir)
+ AS_AC_EXPAND(LIBDIR, $libdir)
+ AS_AC_EXPAND(LIBEXECDIR, $libexecdir)
+ 
+ dnl ---------------------------------------------------------------------------
+ dnl - runtime directory
+ dnl ---------------------------------------------------------------------------
+ 
+ AC_ARG_WITH([run-dir],
+             AS_HELP_STRING([--with-run-dir=<file>],
+                            [runtime directory]))
+ 
+ if ! test -z "$with_run_dir"; then
+    GDM_RUN_DIR=$with_run_dir
+ else
+    GDM_RUN_DIR=${localstatedir}/run/gdm
+ fi
+ 
+ AC_SUBST([GDM_RUN_DIR])
+ 
+ dnl ---------------------------------------------------------------------------
+ dnl - PID file
+-- 
+2.17.1
+

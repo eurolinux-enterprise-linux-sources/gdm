@@ -1,0 +1,33 @@
+From e21c8b8fcdd3365ac19ae4024c0f615526358072 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Thu, 16 Mar 2017 10:52:41 -0400
+Subject: [PATCH] gdm.conf-custom.in: strip out reference to wayland
+
+---
+ data/gdm.conf-custom.in | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/data/gdm.conf-custom.in b/data/gdm.conf-custom.in
+index 67ebca39..73d0b5f4 100644
+--- a/data/gdm.conf-custom.in
++++ b/data/gdm.conf-custom.in
+@@ -1,16 +1,14 @@
+ # GDM configuration storage
+ 
+ [daemon]
+-# Uncoment the line below to force the login screen to use Xorg
+-#WaylandEnable=false
+ 
+ [security]
+ 
+ [xdmcp]
+ 
+ [chooser]
+ 
+ [debug]
+ # Uncomment the line below to turn on debugging
+ #Enable=true
+ 
+-- 
+2.14.2
+

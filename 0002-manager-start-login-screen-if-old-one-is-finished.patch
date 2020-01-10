@@ -1,0 +1,92 @@
+From 6b4402fb0bbf17803c2354e92fc448a537d2d506 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 22 Jun 2018 14:55:39 -0400
+Subject: [PATCH 2/7] manager: start login screen if old one is finished
+
+Since commit 22c332ba we try to start a login screen if we end up
+on an empty VT and there isn't one running.
+
+Unfortunately the check for "is on an empty VT" is a little busted.
+It counts the VT has non-empty if there's a display associated with
+it, even if that display is in the FINISHED state about to be
+reaped.
+
+That means, in some cases, we'll still leave the user on an empty
+VT with no login screen.
+
+This commit addresses the problem by explicitly checking for
+FINISHED displays, and proceeding even in their presense.
+---
+ daemon/gdm-manager.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/daemon/gdm-manager.c b/daemon/gdm-manager.c
+index 129cc0de4..3f5772e65 100644
+--- a/daemon/gdm-manager.c
++++ b/daemon/gdm-manager.c
+@@ -1410,61 +1410,61 @@ activate_login_window_session_on_seat (GdmManager *self,
+         char *session_id;
+ 
+         if (!get_login_window_session_id (seat_id, &session_id)) {
+                 return;
+         }
+ 
+         activate_session_id (self, seat_id, session_id);
+ }
+ 
+ static void
+ maybe_activate_other_session (GdmManager *self,
+                               GdmDisplay *old_display)
+ {
+         char *seat_id = NULL;
+         char *session_id = NULL;
+         int ret;
+ 
+         g_object_get (G_OBJECT (old_display),
+                       "seat-id", &seat_id,
+                       NULL);
+ 
+         ret = sd_seat_get_active (seat_id, &session_id, NULL);
+ 
+         if (ret == 0) {
+                 GdmDisplay *display;
+ 
+                 display = gdm_display_store_find (self->priv->display_store,
+                                                   lookup_by_session_id,
+                                                   (gpointer) session_id);
+ 
+-                if (display == NULL) {
++                if (display == NULL || gdm_display_get_status (display) == GDM_DISPLAY_FINISHED) {
+                         activate_login_window_session_on_seat (self, seat_id);
+                 }
+ 
+                 g_free (session_id);
+         }
+ 
+         g_free (seat_id);
+ }
+ 
+ static const char *
+ get_username_for_greeter_display (GdmManager *manager,
+                                   GdmDisplay *display)
+ {
+         gboolean doing_initial_setup = FALSE;
+ 
+         g_object_get (G_OBJECT (display),
+                       "doing-initial-setup", &doing_initial_setup,
+                       NULL);
+ 
+         if (doing_initial_setup) {
+                 return INITIAL_SETUP_USERNAME;
+         } else {
+                 return GDM_USERNAME;
+         }
+ }
+ 
+ static void
+ set_up_automatic_login_session (GdmManager *manager,
+                                 GdmDisplay *display)
+ {
+-- 
+2.19.0
+

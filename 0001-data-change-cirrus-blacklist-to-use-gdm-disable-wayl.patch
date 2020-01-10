@@ -1,0 +1,112 @@
+From a9b82ca4a87315235924317c0fc48324a8b7cb9f Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Mon, 21 May 2018 11:13:31 -0400
+Subject: [PATCH] data: change cirrus blacklist to use gdm-disable-wayland
+
+Now that we have a gdm-disable-wayland binary for disabling
+wayland at boot, we should use it.
+
+This commit changes the cirrus udev rule to use gdm-disable-wayland,
+rather than running sh and printf.
+
+https://bugzilla.gnome.org/show_bug.cgi?id=796315
+
+
+(cherry picked from commit a913eea70342411247e770a91b75dd800941bb6e)
+---
+ data/61-gdm.rules    | 2 --
+ data/61-gdm.rules.in | 2 ++
+ data/Makefile.am     | 5 +++++
+ 3 files changed, 7 insertions(+), 2 deletions(-)
+ delete mode 100644 data/61-gdm.rules
+ create mode 100644 data/61-gdm.rules.in
+
+diff --git a/data/61-gdm.rules b/data/61-gdm.rules
+deleted file mode 100644
+index 5ffa8b8a0..000000000
+--- a/data/61-gdm.rules
++++ /dev/null
+@@ -1,2 +0,0 @@
+-# disable Wayland on Cirrus chipsets
+-ATTR{vendor}=="0x1013", ATTR{device}=="0x00b8", ATTR{subsystem_vendor}=="0x1af4", ATTR{subsystem_device}=="0x1100", RUN+="/bin/sh -c '/bin/mkdir /run/gdm ; /usr/bin/printf \"[daemon]\nWaylandEnable=false\" >> /run/gdm/custom.conf'"
+diff --git a/data/61-gdm.rules.in b/data/61-gdm.rules.in
+new file mode 100644
+index 000000000..de8e17903
+--- /dev/null
++++ b/data/61-gdm.rules.in
+@@ -0,0 +1,2 @@
++# disable Wayland on Cirrus chipsets
++ATTR{vendor}=="0x1013", ATTR{device}=="0x00b8", ATTR{subsystem_vendor}=="0x1af4", ATTR{subsystem_device}=="0x1100", RUN+="@libexecdir@/gdm-disable-wayland"
+diff --git a/data/Makefile.am b/data/Makefile.am
+index a47e7900f..192dfa052 100644
+--- a/data/Makefile.am
++++ b/data/Makefile.am
+@@ -134,60 +134,65 @@ pam_lfs_files = \
+ EXTRA_DIST += $(pam_lfs_files)
+ 
+ pam_arch_files = pam-arch/gdm-autologin.pam	\
+ 	pam-arch/gdm-launch-environment.pam	\
+ 	pam-arch/gdm-fingerprint.pam		\
+ 	pam-arch/gdm-smartcard.pam		\
+ 	pam-arch/gdm-password.pam		\
+ 	pam-arch/gdm-pin.pam			\
+ 	$(NULL)
+ EXTRA_DIST += $(pam_arch_files)
+ 
+ if ENABLE_REDHAT_PAM_CONFIG
+ pam_files = $(pam_redhat_files)
+ endif
+ if ENABLE_OPENEMBEDDED_PAM_CONFIG
+ pam_files = $(pam_openembedded_files)
+ endif
+ if ENABLE_EXHERBO_PAM_CONFIG
+ pam_files = $(pam_exherbo_files)
+ endif
+ if ENABLE_LFS_PAM_CONFIG
+ pam_files = $(pam_lfs_files)
+ endif
+ if ENABLE_ARCH_PAM_CONFIG
+ pam_files = $(pam_arch_files)
+ endif
+ 
+ udevrulesdir = $(prefix)/lib/udev/rules.d
+ udevrules_DATA = 61-gdm.rules
+ 
++EXTRA_DIST += $(srcdir)/61-gdm.rules.in
++61-gdm.rules: $(srcdir)/61-gdm.rules.in
++	sed	-e 's,[@]libexecdir[@],$(libexecdir),g' \
++		< $< > $@.tmp && mv $@.tmp $@
++
+ EXTRA_DIST +=			\
+ 	$(dconf_db_files)	\
+ 	$(schemas_in_files)	\
+ 	$(schemas_DATA)		\
+ 	$(dbusconf_in_files)	\
+ 	$(localealias_DATA)	\
+ 	$(udevrules_DATA)	\
+ 	gdm.schemas.in.in	\
+ 	gdm.conf-custom.in 	\
+ 	Xsession.in 		\
+ 	Init.in 		\
+ 	PreSession.in 		\
+ 	PostSession.in 		\
+ 	PostLogin 		\
+ 	org.gnome.login-screen.gschema.xml.in \
+ 	$(NULL)
+ 
+ CLEANFILES = 				\
+ 	Xsession			\
+ 	gdm.conf-custom			\
+ 	Init				\
+ 	PreSession			\
+ 	PostSession			\
+ 	$(gsettings_SCHEMAS)		\
+ 	greeter-dconf-defaults		\
+ 	$(NULL)
+ 
+ DISTCLEANFILES =			\
+ 	$(dbusconf_DATA)		\
+ 	gdm.schemas			\
+-- 
+2.17.1
+

@@ -1,0 +1,104 @@
+From be25f936f6568af9019bf446c3cf2a19de5e167f Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@localhost.localdomain>
+Date: Fri, 12 May 2017 15:20:14 -0400
+Subject: [PATCH] worker: add compat patch to make new worker work with old
+ daemon
+
+---
+ daemon/gdm-session-worker.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/daemon/gdm-session-worker.c b/daemon/gdm-session-worker.c
+index 10ecccb0..f71594c2 100644
+--- a/daemon/gdm-session-worker.c
++++ b/daemon/gdm-session-worker.c
+@@ -3140,69 +3140,86 @@ gdm_session_worker_handle_setup_for_user (GdmDBusWorker         *object,
+ static gboolean
+ gdm_session_worker_handle_setup_for_program (GdmDBusWorker         *object,
+                                              GDBusMethodInvocation *invocation,
+                                              const char            *service,
+                                              const char            *username,
+                                              const char            *x11_display_name,
+                                              const char            *x11_authority_file,
+                                              const char            *console,
+                                              const char            *seat_id,
+                                              const char            *hostname,
+                                              gboolean               display_is_local,
+                                              const char            *log_file)
+ {
+         GdmSessionWorker *worker = GDM_SESSION_WORKER (object);
+         validate_and_queue_state_change (worker, invocation, GDM_SESSION_WORKER_STATE_SETUP_COMPLETE);
+ 
+         worker->priv->service = g_strdup (service);
+         worker->priv->x11_display_name = g_strdup (x11_display_name);
+         worker->priv->x11_authority_file = g_strdup (x11_authority_file);
+         worker->priv->display_device = g_strdup (console);
+         worker->priv->display_seat_id = g_strdup (seat_id);
+         worker->priv->hostname = g_strdup (hostname);
+         worker->priv->display_is_local = display_is_local;
+         worker->priv->username = g_strdup (username);
+         worker->priv->log_file = g_strdup (log_file);
+         worker->priv->is_program_session = TRUE;
+ 
+         return TRUE;
+ }
+ 
++static void
++fix_environment_if_old_gdm_daemon_running (GdmSessionWorker *worker)
++{
++        const char *daemon_version;
++        const char *username;
++
++        daemon_version = gdm_session_worker_get_environment_variable (worker, "GDM_VERSION");
++        username = gdm_session_worker_get_environment_variable (worker, "USERNAME");
++
++        if (g_strcmp0 (daemon_version, "3.14.2") == 0 &&
++            g_strcmp0 (username, "gdm") == 0) {
++            gdm_session_worker_set_environment_variable (worker, "GNOME_SHELL_SESSION_MODE", "gdm");
++        }
++}
++
+ static gboolean
+ gdm_session_worker_handle_start_program (GdmDBusWorker         *object,
+                                          GDBusMethodInvocation *invocation,
+                                          const char            *text)
+ {
+         GdmSessionWorker *worker = GDM_SESSION_WORKER (object);
+         GError *parse_error = NULL;
+         validate_state_change (worker, invocation, GDM_SESSION_WORKER_STATE_SESSION_STARTED);
+ 
++        fix_environment_if_old_gdm_daemon_running (worker);
++
+         if (worker->priv->is_reauth_session) {
+                 g_dbus_method_invocation_return_error (invocation,
+                                                        GDM_SESSION_WORKER_ERROR,
+                                                        GDM_SESSION_WORKER_ERROR_IN_REAUTH_SESSION,
+                                                        "Cannot start a program while in a reauth session");
+                 return TRUE;
+         }
+ 
+         g_debug ("GdmSessionWorker: start program: %s", text);
+ 
+         g_clear_pointer (&worker->priv->arguments, (GDestroyNotify) g_strfreev);
+         if (! g_shell_parse_argv (text, NULL, &worker->priv->arguments, &parse_error)) {
+                 g_dbus_method_invocation_take_error (invocation, parse_error);
+                 return TRUE;
+         }
+ 
+         worker->priv->pending_invocation = invocation;
+         queue_state_change (worker);
+ 
+         return TRUE;
+ }
+ 
+ static void
+ on_reauthentication_client_connected (GdmSession              *session,
+                                       GCredentials            *credentials,
+                                       GPid                     pid_of_client,
+                                       ReauthenticationRequest *request)
+ {
+         g_debug ("GdmSessionWorker: client connected to reauthentication server");
+ }
+-- 
+2.14.2
+

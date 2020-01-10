@@ -1,0 +1,97 @@
+From 91eee14bcd2447d78ad00e3de9d4380e423cb897 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Mon, 24 Sep 2018 10:53:53 -0400
+Subject: [PATCH 6/7] daemon: ensure is-initial bit is transferred to new login
+ screen at logout
+
+At the moment, when a user logs out we call sync_seats to restart the
+login screen. sync_seats doesn't know whether or not vt1 is occupied.
+
+This commit changes the code to call the more targeted `create_display`
+function, which we can inform of vt1's availability by the is_initial
+flag.
+---
+ daemon/gdm-local-display-factory.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/daemon/gdm-local-display-factory.c b/daemon/gdm-local-display-factory.c
+index cf852b55a..9a07f03ed 100644
+--- a/daemon/gdm-local-display-factory.c
++++ b/daemon/gdm-local-display-factory.c
+@@ -257,70 +257,68 @@ on_display_status_changed (GdmDisplay             *display,
+         char            *session_type = NULL;
+         char            *session_class = NULL;
+         gboolean         is_initial = TRUE;
+         gboolean         is_local = TRUE;
+ 
+         num = -1;
+         gdm_display_get_x11_display_number (display, &num, NULL);
+ 
+         store = gdm_display_factory_get_display_store (GDM_DISPLAY_FACTORY (factory));
+ 
+         g_object_get (display,
+                       "seat-id", &seat_id,
+                       "is-initial", &is_initial,
+                       "is-local", &is_local,
+                       "session-type", &session_type,
+                       "session-class", &session_class,
+                       NULL);
+ 
+         status = gdm_display_get_status (display);
+ 
+         g_debug ("GdmLocalDisplayFactory: display status changed: %d", status);
+         switch (status) {
+         case GDM_DISPLAY_FINISHED:
+                 /* remove the display number from factory->priv->used_display_numbers
+                    so that it may be reused */
+                 if (num != -1) {
+                         g_hash_table_remove (factory->priv->used_display_numbers, GUINT_TO_POINTER (num));
+                 }
+                 gdm_display_store_remove (store, display);
+ 
+-                /* if this is a local display, do a full resync.  Only
+-                 * seats without displays will get created anyway.  This
+-                 * ensures we get a new login screen when the user logs out,
+-                 * if there isn't one.
++                /* if this is a local display, recreate the display so
++                 * a new login screen comes up if one is missing.
+                  */
+                 if (is_local && g_strcmp0 (session_class, "greeter") != 0) {
+                         /* reset num failures */
+                         factory->priv->num_failures = 0;
+ 
+-                        gdm_local_display_factory_sync_seats (factory);
++                        create_display (factory, seat_id, session_type, is_initial);
+                 }
+                 break;
+         case GDM_DISPLAY_FAILED:
+                 /* leave the display number in factory->priv->used_display_numbers
+                    so that it doesn't get reused */
+                 gdm_display_store_remove (store, display);
+ 
+                 /* Create a new equivalent display if it was static */
+                 if (is_local) {
+ 
+                         factory->priv->num_failures++;
+ 
+                         if (factory->priv->num_failures > MAX_DISPLAY_FAILURES) {
+                                 /* oh shit */
+                                 g_warning ("GdmLocalDisplayFactory: maximum number of X display failures reached: check X server log for errors");
+                         } else {
+ #ifdef ENABLE_WAYLAND_SUPPORT
+                                 if (g_strcmp0 (session_type, "wayland") == 0) {
+                                         g_free (session_type);
+                                         session_type = NULL;
+                                 }
+ 
+ #endif
+                                 create_display (factory, seat_id, session_type, is_initial);
+                         }
+                 }
+                 break;
+         case GDM_DISPLAY_UNMANAGED:
+                 break;
+         case GDM_DISPLAY_PREPARED:
+-- 
+2.19.0
+

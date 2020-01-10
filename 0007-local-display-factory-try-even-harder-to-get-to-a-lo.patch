@@ -1,0 +1,118 @@
+From 72782991144e8e6671c2dbed6fe1727e2dc329fb Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Thu, 4 Oct 2018 14:01:44 -0400
+Subject: [PATCH 7/7] local-display-factory: try even harder to get to a login
+ screen
+
+At the moment we sometimes fail to create a login screen when
+logout results in the user ending up on an empty VT.
+
+That is because we're accidentally running into the non-seat0
+code path for seat0.
+
+This commit addresses the problem by specifically checking for
+if the seat is multi-session capable rather than checking if
+the seat has an active session.
+---
+ daemon/gdm-local-display-factory.c | 19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/daemon/gdm-local-display-factory.c b/daemon/gdm-local-display-factory.c
+index 8b0b2e5c2..cf4f5095c 100644
+--- a/daemon/gdm-local-display-factory.c
++++ b/daemon/gdm-local-display-factory.c
+@@ -459,80 +459,83 @@ get_login_window_session_id (const char  *seat_id,
+                         free (service_id);
+                         goto out;
+                 }
+ 
+                 free (service_id);
+         }
+ 
+         *session_id = NULL;
+         ret = FALSE;
+ 
+ out:
+         if (sessions) {
+                 for (i = 0; sessions[i]; i ++) {
+                         free (sessions[i]);
+                 }
+ 
+                 free (sessions);
+         }
+ 
+         return ret;
+ }
+ 
+ static GdmDisplay *
+ create_display (GdmLocalDisplayFactory *factory,
+                 const char             *seat_id,
+                 const char             *session_type,
+                 gboolean                initial)
+ {
+         GdmDisplayStore *store;
+         GdmDisplay      *display = NULL;
+-        char            *active_session_id = NULL;
+         int              ret;
+ 
+         store = gdm_display_factory_get_display_store (GDM_DISPLAY_FACTORY (factory));
+ 
+-        ret = sd_seat_get_active (seat_id, &active_session_id, NULL);
+-
+-        if (ret == 0) {
++        if (sd_seat_can_multi_session (seat_id)) {
+                 char *login_session_id = NULL;
+ 
+                 /* If we already have a login window, switch to it */
+                 if (get_login_window_session_id (seat_id, &login_session_id)) {
+-                        if (g_strcmp0 (active_session_id, login_session_id) != 0) {
++                        char *active_session_id = NULL;
++
++                        ret = sd_seat_get_active (seat_id, &active_session_id, NULL);
++
++                        if (ret == 0 && g_strcmp0 (active_session_id, login_session_id) != 0) {
+                                 activate_session_id (factory, seat_id, login_session_id);
++
++                                g_clear_pointer (&login_session_id, g_free);
++                                g_clear_pointer (&active_session_id, g_free);
++                                return NULL;
+                         }
++
+                         g_clear_pointer (&login_session_id, g_free);
+-                        g_clear_pointer (&active_session_id, g_free);
+-                        return NULL;
+                 }
+-                g_clear_pointer (&active_session_id, g_free);
+         } else {
+                 /* Ensure we don't create the same display more than once */
+                 display = gdm_display_store_find (store, lookup_by_seat_id, (gpointer) seat_id);
+ 
+                 if (display != NULL) {
+                         return NULL;
+                 }
+         }
+ 
+         g_debug ("GdmLocalDisplayFactory: Adding display on seat %s", seat_id);
+ 
+ #ifdef ENABLE_USER_DISPLAY_SERVER
+         if (g_strcmp0 (seat_id, "seat0") == 0) {
+                 display = gdm_local_display_new ();
+                 if (session_type != NULL) {
+                         g_object_set (G_OBJECT (display), "session-type", session_type, NULL);
+                 }
+         }
+ #endif
+ 
+         if (display == NULL) {
+                 guint32 num;
+ 
+                 num = take_next_display_number (factory);
+ 
+                 display = gdm_legacy_display_new (num);
+         }
+ 
+         g_object_set (display, "seat-id", seat_id, NULL);
+         g_object_set (display, "is-initial", initial, NULL);
+-- 
+2.17.1
+

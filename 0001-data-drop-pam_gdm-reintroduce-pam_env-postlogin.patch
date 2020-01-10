@@ -1,0 +1,45 @@
+From 6effb1671a917adb3ed8f77f5e13324e8b455c32 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Tue, 30 Jan 2018 10:32:08 -0500
+Subject: [PATCH] data: drop pam_gdm, reintroduce pam_env/postlogin
+
+The current upstream pam configuration upstream doesn't really
+make sense in RHEL.
+
+systemd doesn't handle /etc/environment on its own in RHEL and it
+doesn't populate the kernel keyring with disk encrypt passwords,
+so pam_gdm is not useful.
+
+This commit restores the pam configuration to something closer to
+what was shipped in 7.3
+---
+ data/pam-redhat/gdm-autologin.pam | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/data/pam-redhat/gdm-autologin.pam b/data/pam-redhat/gdm-autologin.pam
+index c31ff27a..aa99e1b0 100644
+--- a/data/pam-redhat/gdm-autologin.pam
++++ b/data/pam-redhat/gdm-autologin.pam
+@@ -1,16 +1,15 @@
+ #%PAM-1.0
+-auth       [success=ok default=1] pam_gdm.so
+--auth      optional    pam_gnome_keyring.so
+-auth       sufficient  pam_permit.so
++auth       required    pam_env.so
++auth       required    pam_permit.so
++auth       include     postlogin
+ account    required    pam_nologin.so
+ account    include     system-auth
+ password   include     system-auth
+ session    required    pam_selinux.so close
+ session    required    pam_loginuid.so
+ session    optional    pam_console.so
+ session    required    pam_selinux.so open
+ session    optional    pam_keyinit.so force revoke
+ session    required    pam_namespace.so
+ session    include     system-auth
+-session    optional    pam_gnome_keyring.so auto_start
+ session    include     postlogin
+-- 
+2.14.3
+

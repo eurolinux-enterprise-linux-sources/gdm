@@ -1,0 +1,280 @@
+From 0522f061f30baeecff958e0deee89934baff3776 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 12 May 2017 10:11:09 -0400
+Subject: [PATCH] Revert "session: forward is-initial from display to worker"
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This reverts commit 7a4e34049c79e907d1a027390c5d3a8dcdc11977.
+
+It breaks login screen until reboot on 7.3→7.4 upgrade.
+---
+ daemon/gdm-session-worker.c   | 10 ++--------
+ daemon/gdm-session-worker.xml |  3 ---
+ 2 files changed, 2 insertions(+), 11 deletions(-)
+
+diff --git a/daemon/gdm-session-worker.c b/daemon/gdm-session-worker.c
+index 34b3bf7f..10ecccb0 100644
+--- a/daemon/gdm-session-worker.c
++++ b/daemon/gdm-session-worker.c
+@@ -3033,166 +3033,160 @@ gdm_session_worker_handle_initialize (GdmDBusWorker         *object,
+ 
+                 if (worker->priv->username) {
+                         wait_for_settings = !gdm_session_settings_load (worker->priv->user_settings,
+                                                                         worker->priv->username);
+                 }
+         }
+ 
+         if (wait_for_settings) {
+                 /* Load settings from accounts daemon before continuing
+                  */
+                 g_signal_connect (G_OBJECT (worker->priv->user_settings),
+                                   "notify::is-loaded",
+                                   G_CALLBACK (on_settings_is_loaded_changed),
+                                   worker);
+         } else {
+                 queue_state_change (worker);
+         }
+ 
+         return TRUE;
+ }
+ 
+ static gboolean
+ gdm_session_worker_handle_setup (GdmDBusWorker         *object,
+                                  GDBusMethodInvocation *invocation,
+                                  const char            *service,
+                                  const char            *x11_display_name,
+                                  const char            *x11_authority_file,
+                                  const char            *console,
+                                  const char            *seat_id,
+                                  const char            *hostname,
+-                                 gboolean               display_is_local,
+-                                 gboolean               display_is_initial)
++                                 gboolean               display_is_local)
+ {
+         GdmSessionWorker *worker = GDM_SESSION_WORKER (object);
+         validate_and_queue_state_change (worker, invocation, GDM_SESSION_WORKER_STATE_SETUP_COMPLETE);
+ 
+         worker->priv->service = g_strdup (service);
+         worker->priv->x11_display_name = g_strdup (x11_display_name);
+         worker->priv->x11_authority_file = g_strdup (x11_authority_file);
+         worker->priv->display_device = g_strdup (console);
+         worker->priv->display_seat_id = g_strdup (seat_id);
+         worker->priv->hostname = g_strdup (hostname);
+         worker->priv->display_is_local = display_is_local;
+-        worker->priv->display_is_initial = display_is_initial;
+         worker->priv->username = NULL;
+ 
+         g_signal_connect_swapped (worker->priv->user_settings,
+                                   "notify::language-name",
+                                   G_CALLBACK (on_saved_language_name_read),
+                                   worker);
+ 
+         g_signal_connect_swapped (worker->priv->user_settings,
+                                   "notify::session-name",
+                                   G_CALLBACK (on_saved_session_name_read),
+                                   worker);
+         return TRUE;
+ }
+ 
+ static gboolean
+ gdm_session_worker_handle_setup_for_user (GdmDBusWorker         *object,
+                                           GDBusMethodInvocation *invocation,
+                                           const char            *service,
+                                           const char            *username,
+                                           const char            *x11_display_name,
+                                           const char            *x11_authority_file,
+                                           const char            *console,
+                                           const char            *seat_id,
+                                           const char            *hostname,
+-                                          gboolean               display_is_local,
+-                                          gboolean               display_is_initial)
++                                          gboolean               display_is_local)
+ {
+         GdmSessionWorker *worker = GDM_SESSION_WORKER (object);
+ 
+         if (!validate_state_change (worker, invocation, GDM_SESSION_WORKER_STATE_SETUP_COMPLETE))
+                 return TRUE;
+ 
+         worker->priv->service = g_strdup (service);
+         worker->priv->x11_display_name = g_strdup (x11_display_name);
+         worker->priv->x11_authority_file = g_strdup (x11_authority_file);
+         worker->priv->display_device = g_strdup (console);
+         worker->priv->display_seat_id = g_strdup (seat_id);
+         worker->priv->hostname = g_strdup (hostname);
+         worker->priv->display_is_local = display_is_local;
+-        worker->priv->display_is_initial = display_is_initial;
+         worker->priv->username = g_strdup (username);
+ 
+         g_signal_connect_swapped (worker->priv->user_settings,
+                                   "notify::language-name",
+                                   G_CALLBACK (on_saved_language_name_read),
+                                   worker);
+ 
+         g_signal_connect_swapped (worker->priv->user_settings,
+                                   "notify::session-name",
+                                   G_CALLBACK (on_saved_session_name_read),
+                                   worker);
+ 
+         /* Load settings from accounts daemon before continuing
+          */
+         worker->priv->pending_invocation = invocation;
+         if (gdm_session_settings_load (worker->priv->user_settings, username)) {
+                 queue_state_change (worker);
+         } else {
+                 g_signal_connect (G_OBJECT (worker->priv->user_settings),
+                                   "notify::is-loaded",
+                                   G_CALLBACK (on_settings_is_loaded_changed),
+                                   worker);
+         }
+ 
+         return TRUE;
+ }
+ 
+ static gboolean
+ gdm_session_worker_handle_setup_for_program (GdmDBusWorker         *object,
+                                              GDBusMethodInvocation *invocation,
+                                              const char            *service,
+                                              const char            *username,
+                                              const char            *x11_display_name,
+                                              const char            *x11_authority_file,
+                                              const char            *console,
+                                              const char            *seat_id,
+                                              const char            *hostname,
+                                              gboolean               display_is_local,
+-                                             gboolean               display_is_initial,
+                                              const char            *log_file)
+ {
+         GdmSessionWorker *worker = GDM_SESSION_WORKER (object);
+         validate_and_queue_state_change (worker, invocation, GDM_SESSION_WORKER_STATE_SETUP_COMPLETE);
+ 
+         worker->priv->service = g_strdup (service);
+         worker->priv->x11_display_name = g_strdup (x11_display_name);
+         worker->priv->x11_authority_file = g_strdup (x11_authority_file);
+         worker->priv->display_device = g_strdup (console);
+         worker->priv->display_seat_id = g_strdup (seat_id);
+         worker->priv->hostname = g_strdup (hostname);
+         worker->priv->display_is_local = display_is_local;
+-        worker->priv->display_is_initial = display_is_initial;
+         worker->priv->username = g_strdup (username);
+         worker->priv->log_file = g_strdup (log_file);
+         worker->priv->is_program_session = TRUE;
+ 
+         return TRUE;
+ }
+ 
+ static gboolean
+ gdm_session_worker_handle_start_program (GdmDBusWorker         *object,
+                                          GDBusMethodInvocation *invocation,
+                                          const char            *text)
+ {
+         GdmSessionWorker *worker = GDM_SESSION_WORKER (object);
+         GError *parse_error = NULL;
+         validate_state_change (worker, invocation, GDM_SESSION_WORKER_STATE_SESSION_STARTED);
+ 
+         if (worker->priv->is_reauth_session) {
+                 g_dbus_method_invocation_return_error (invocation,
+                                                        GDM_SESSION_WORKER_ERROR,
+                                                        GDM_SESSION_WORKER_ERROR_IN_REAUTH_SESSION,
+                                                        "Cannot start a program while in a reauth session");
+                 return TRUE;
+         }
+ 
+         g_debug ("GdmSessionWorker: start program: %s", text);
+ 
+         g_clear_pointer (&worker->priv->arguments, (GDestroyNotify) g_strfreev);
+         if (! g_shell_parse_argv (text, NULL, &worker->priv->arguments, &parse_error)) {
+                 g_dbus_method_invocation_take_error (invocation, parse_error);
+                 return TRUE;
+diff --git a/daemon/gdm-session-worker.xml b/daemon/gdm-session-worker.xml
+index 4280fe09..bc055973 100644
+--- a/daemon/gdm-session-worker.xml
++++ b/daemon/gdm-session-worker.xml
+@@ -8,83 +8,80 @@
+       <arg name="session_id" direction="out" type="s"/>
+     </method>
+     <method name="SetLanguageName">
+       <arg name="language" direction="in" type="s"/>
+     </method>
+     <method name="SetSessionName">
+       <arg name="session_name" direction="in" type="s" />
+     </method>
+     <method name="SetSessionDisplayMode">
+       <arg name="mode" direction="in" type="s"/>
+     </method>
+     <method name="SetEnvironmentVariable">
+       <arg name="name" direction="in" type="s"/>
+       <arg name="value" direction="in" type="s"/>
+     </method>
+     <method name="StartProgram">
+       <arg name="command" direction="in" type="s"/>
+       <arg name="child_pid" direction="out" type="i"/>
+     </method>
+     <method name="Initialize">
+       <arg name="details" direction="in" type="a{sv}"/>
+     </method>
+     <method name="Setup">
+       <arg name="service_name" direction="in" type="s"/>
+       <arg name="x11_display_name" direction="in" type="s"/>
+       <arg name="x11_authority_file" direction="in" type="s"/>
+       <arg name="display_device" direction="in" type="s"/>
+       <arg name="display_seat" direction="in" type="s"/>
+       <arg name="hostname" direction="in" type="s"/>
+       <arg name="display_is_local" direction="in" type="b"/>
+-      <arg name="display_is_initial" direction="in" type="b"/>
+     </method>
+     <method name="SetupForUser">
+       <arg name="service_name" direction="in" type="s"/>
+       <arg name="user_name" direction="in" type="s"/>
+       <arg name="x11_display_name" direction="in" type="s"/>
+       <arg name="x11_authority_file" direction="in" type="s"/>
+       <arg name="display_device" direction="in" type="s"/>
+       <arg name="display_seat" direction="in" type="s"/>
+       <arg name="hostname" direction="in" type="s"/>
+       <arg name="display_is_local" direction="in" type="b"/>
+-      <arg name="display_is_initial" direction="in" type="b"/>
+     </method>
+     <method name="SetupForProgram">
+       <arg name="service_name" direction="in" type="s"/>
+       <arg name="user_name" direction="in" type="s"/>
+       <arg name="x11_display_name" direction="in" type="s"/>
+       <arg name="x11_authority_file" direction="in" type="s"/>
+       <arg name="display_device" direction="in" type="s"/>
+       <arg name="display_seat" direction="in" type="s"/>
+       <arg name="hostname" direction="in" type="s"/>
+       <arg name="display_is_local" direction="in" type="b"/>
+-      <arg name="display_is_initial" direction="in" type="b"/>
+       <arg name="log_file" direction="in" type="s"/>
+     </method>
+     <method name="StartReauthentication">
+       <arg name="pid_of_caller" direction="in" type="i"/>
+       <arg name="uid_of_caller" direction="in" type="i"/>
+       <arg name="address" direction="out" type="s"/>
+     </method>
+ 
+     <signal name="SessionExited">
+       <arg name="service_name" type="s" />
+       <!-- This is a combination of exit code and exit
+            signal. Use macros in sys/wait.h to handle it. -->
+       <arg name="status" type="i" />
+     </signal>
+     <signal name="SavedLanguageNameRead">
+       <arg name="language_name" type="s"/>
+     </signal>
+     <signal name="SavedSessionNameRead">
+       <arg name="session_name" type="s"/>
+     </signal>
+     <signal name="UsernameChanged">
+       <arg name="new_username" type="s"/>
+     </signal>
+     <signal name="Reauthenticated">
+       <arg name="service_name" type="s"/>
+     </signal>
+     <signal name="CancelPendingQuery">
+     </signal>
+   </interface>
+ </node>
+-- 
+2.14.2
+

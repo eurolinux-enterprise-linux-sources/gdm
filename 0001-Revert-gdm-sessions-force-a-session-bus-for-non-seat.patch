@@ -1,0 +1,86 @@
+From 5c86f9731ed715bcf603c9dd93dced002f11b996 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Tue, 17 Oct 2017 10:06:22 -0400
+Subject: [PATCH] Revert "gdm-sessions: force a session bus for non-seat0
+ session"
+
+This reverts commit 2b52d8933c8ab38e7ee83318da2363d00d8c5581.
+---
+ daemon/gdm-session.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/daemon/gdm-session.c b/daemon/gdm-session.c
+index 3e71ad2f..3a1b7f23 100644
+--- a/daemon/gdm-session.c
++++ b/daemon/gdm-session.c
+@@ -2870,66 +2870,61 @@ gdm_session_start_session (GdmSession *self,
+                         allow_remote_connections = TRUE;
+                 }
+ 
+                 if (run_launcher) {
+                         if (is_x11) {
+                                 program = g_strdup_printf (LIBEXECDIR "/gdm-x-session %s %s\"%s\"",
+                                                            run_xsession_script? "--run-script " : "",
+                                                            allow_remote_connections? "--allow-remote-connections " : "",
+                                                            command);
+                         } else {
+                                 program = g_strdup_printf (LIBEXECDIR "/gdm-wayland-session \"%s\"",
+                                                            command);
+                         }
+                 } else if (run_xsession_script) {
+                         program = g_strdup_printf (GDMCONFDIR "/Xsession \"%s\"", command);
+                 } else {
+                         program = g_strdup (command);
+                 }
+ 
+                 g_free (command);
+         } else {
+                 if (run_launcher) {
+                         if (is_x11) {
+                                 program = g_strdup_printf (LIBEXECDIR "/gdm-x-session \"%s\"",
+                                                            self->priv->selected_program);
+                         } else {
+                                 program = g_strdup_printf (LIBEXECDIR "/gdm-wayland-session \"%s\"",
+                                                            self->priv->selected_program);
+                         }
+                 } else {
+-                        if (g_strcmp0 (self->priv->display_seat_id, "seat0") != 0) {
+-                                program = g_strdup_printf ("dbus-run-session -- %s",
+-                                                           self->priv->selected_program);
+-                        } else {
+-                                program = g_strdup (self->priv->selected_program);
+-                        }
++                        program = g_strdup (self->priv->selected_program);
+                 }
+         }
+ 
+         set_up_session_environment (self);
+         send_environment (self, conversation);
+ 
+         gdm_dbus_worker_call_start_program (conversation->worker_proxy,
+                                             program,
+                                             conversation->worker_cancellable,
+                                             (GAsyncReadyCallback) on_start_program_cb,
+                                             conversation);
+         g_free (program);
+ }
+ 
+ static void
+ stop_all_conversations (GdmSession *self)
+ {
+         stop_all_other_conversations (self, NULL, TRUE);
+ }
+ 
+ static void
+ do_reset (GdmSession *self)
+ {
+         stop_all_conversations (self);
+ 
+         g_list_free_full (self->priv->pending_worker_connections, g_object_unref);
+         self->priv->pending_worker_connections = NULL;
+ 
+         g_free (self->priv->selected_user);
+         self->priv->selected_user = NULL;
+-- 
+2.14.2
+

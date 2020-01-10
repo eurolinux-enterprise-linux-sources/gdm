@@ -1,0 +1,126 @@
+From 64779fcad9efa9fdb4b1a8963e2386cf763e53d8 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Fri, 22 Jun 2018 15:26:03 -0400
+Subject: [PATCH 3/7] manager: don't bail if session disappears out from under
+ us
+
+It's entirely possible for a session returned by
+sd_seat_get_sessions to disappear immediately after the
+sd_seat_get_sessions call returns.  This is especially
+likely at logout time where the session will briefly be
+in the "closing" state before getting reaped.
+
+If that happens when we're looking for a greeter session, we
+stop looking for a greeter session and bail out all confused.
+
+This commit fixes the confusion by gracefully handling the
+session disappearing by just proceeding to the next session
+in the list.
+---
+ daemon/gdm-manager.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/daemon/gdm-manager.c b/daemon/gdm-manager.c
+index 3f5772e65..c391307fa 100644
+--- a/daemon/gdm-manager.c
++++ b/daemon/gdm-manager.c
+@@ -1318,87 +1318,96 @@ maybe_start_pending_initial_login (GdmManager *manager,
+         g_free (user_session_seat_id);
+ }
+ 
+ static gboolean
+ get_login_window_session_id (const char  *seat_id,
+                              char       **session_id)
+ {
+         gboolean   ret;
+         int        res, i;
+         char     **sessions;
+         char      *service_id;
+         char      *service_class;
+         char      *state;
+ 
+         res = sd_seat_get_sessions (seat_id, &sessions, NULL, NULL);
+         if (res < 0) {
+                 g_debug ("Failed to determine sessions: %s", strerror (-res));
+                 return FALSE;
+         }
+ 
+         if (sessions == NULL || sessions[0] == NULL) {
+                 *session_id = NULL;
+                 ret = TRUE;
+                 goto out;
+         }
+ 
+         for (i = 0; sessions[i]; i ++) {
+ 
+                 res = sd_session_get_class (sessions[i], &service_class);
+                 if (res < 0) {
++                        if (res == -ENOENT || res == -ENXIO) {
++                                continue;
++                        }
++
+                         g_debug ("failed to determine class of session %s: %s", sessions[i], strerror (-res));
+                         ret = FALSE;
+                         goto out;
+                 }
+ 
+                 if (strcmp (service_class, "greeter") != 0) {
+                         free (service_class);
+                         continue;
+                 }
+ 
+                 free (service_class);
+ 
+                 ret = sd_session_get_state (sessions[i], &state);
+                 if (ret < 0) {
++                        if (res == -ENOENT || res == -ENXIO)
++                                continue;
++
+                         g_debug ("failed to determine state of session %s: %s", sessions[i], strerror (-res));
+                         ret = FALSE;
+                         goto out;
+                 }
+ 
+                 if (g_strcmp0 (state, "closing") == 0) {
+                         free (state);
+                         continue;
+                 }
+                 free (state);
+ 
+                 res = sd_session_get_service (sessions[i], &service_id);
+                 if (res < 0) {
++                        if (res == -ENOENT || res == -ENXIO)
++                                continue;
+                         g_debug ("failed to determine service of session %s: %s", sessions[i], strerror (-res));
+                         ret = FALSE;
+                         goto out;
+                 }
+ 
+                 if (strcmp (service_id, "gdm-launch-environment") == 0) {
+                         *session_id = g_strdup (sessions[i]);
+                         ret = TRUE;
+ 
+                         free (service_id);
+                         goto out;
+                 }
+ 
+                 free (service_id);
+         }
+ 
+         *session_id = NULL;
+         ret = TRUE;
+ 
+ out:
+         if (sessions) {
+                 for (i = 0; sessions[i]; i ++) {
+                         free (sessions[i]);
+                 }
+ 
+                 free (sessions);
+         }
+ 
+         return ret;
+ }
+-- 
+2.19.0
+

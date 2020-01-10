@@ -1,0 +1,146 @@
+From 65c3fc674ee4ec0f5139973aa53114db2f1fcf45 Mon Sep 17 00:00:00 2001
+From: Ray Strode <rstrode@redhat.com>
+Date: Tue, 17 Jul 2018 15:40:25 -0400
+Subject: [PATCH 4/7] manager: make get_login_window_session_id fail if no
+ login screen
+
+Right now we oddly succeed from get_login_window_session_id
+if we can't find a login window.
+
+None of the caller expect that, so fail instead.
+---
+ daemon/gdm-manager.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/daemon/gdm-manager.c b/daemon/gdm-manager.c
+index c391307fa..34ee74033 100644
+--- a/daemon/gdm-manager.c
++++ b/daemon/gdm-manager.c
+@@ -1310,122 +1310,122 @@ maybe_start_pending_initial_login (GdmManager *manager,
+                       NULL);
+ 
+         if (g_strcmp0 (greeter_seat_id, user_session_seat_id) == 0) {
+                 start_user_session (manager, operation);
+                 manager->priv->initial_login_operation = NULL;
+         }
+ 
+         g_free (greeter_seat_id);
+         g_free (user_session_seat_id);
+ }
+ 
+ static gboolean
+ get_login_window_session_id (const char  *seat_id,
+                              char       **session_id)
+ {
+         gboolean   ret;
+         int        res, i;
+         char     **sessions;
+         char      *service_id;
+         char      *service_class;
+         char      *state;
+ 
+         res = sd_seat_get_sessions (seat_id, &sessions, NULL, NULL);
+         if (res < 0) {
+                 g_debug ("Failed to determine sessions: %s", strerror (-res));
+                 return FALSE;
+         }
+ 
+         if (sessions == NULL || sessions[0] == NULL) {
+                 *session_id = NULL;
+-                ret = TRUE;
++                ret = FALSE;
+                 goto out;
+         }
+ 
+         for (i = 0; sessions[i]; i ++) {
+ 
+                 res = sd_session_get_class (sessions[i], &service_class);
+                 if (res < 0) {
+                         if (res == -ENOENT || res == -ENXIO) {
+                                 continue;
+                         }
+ 
+                         g_debug ("failed to determine class of session %s: %s", sessions[i], strerror (-res));
+                         ret = FALSE;
+                         goto out;
+                 }
+ 
+                 if (strcmp (service_class, "greeter") != 0) {
+                         free (service_class);
+                         continue;
+                 }
+ 
+                 free (service_class);
+ 
+                 ret = sd_session_get_state (sessions[i], &state);
+                 if (ret < 0) {
+                         if (res == -ENOENT || res == -ENXIO)
+                                 continue;
+ 
+                         g_debug ("failed to determine state of session %s: %s", sessions[i], strerror (-res));
+                         ret = FALSE;
+                         goto out;
+                 }
+ 
+                 if (g_strcmp0 (state, "closing") == 0) {
+                         free (state);
+                         continue;
+                 }
+                 free (state);
+ 
+                 res = sd_session_get_service (sessions[i], &service_id);
+                 if (res < 0) {
+                         if (res == -ENOENT || res == -ENXIO)
+                                 continue;
+                         g_debug ("failed to determine service of session %s: %s", sessions[i], strerror (-res));
+                         ret = FALSE;
+                         goto out;
+                 }
+ 
+                 if (strcmp (service_id, "gdm-launch-environment") == 0) {
+                         *session_id = g_strdup (sessions[i]);
+                         ret = TRUE;
+ 
+                         free (service_id);
+                         goto out;
+                 }
+ 
+                 free (service_id);
+         }
+ 
+         *session_id = NULL;
+-        ret = TRUE;
++        ret = FALSE;
+ 
+ out:
+         if (sessions) {
+                 for (i = 0; sessions[i]; i ++) {
+                         free (sessions[i]);
+                 }
+ 
+                 free (sessions);
+         }
+ 
+         return ret;
+ }
+ 
+ static void
+ activate_login_window_session_on_seat (GdmManager *self,
+                                        const char *seat_id)
+ {
+         char *session_id;
+ 
+         if (!get_login_window_session_id (seat_id, &session_id)) {
+                 return;
+         }
+ 
+         activate_session_id (self, seat_id, session_id);
+ }
+ 
+ static void
+ maybe_activate_other_session (GdmManager *self,
+                               GdmDisplay *old_display)
+ {
+-- 
+2.19.0
+
